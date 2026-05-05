@@ -19,7 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migration:create": "node --import tsx/esm node_modules/@mikro-orm/cli/cli.js migration:create",
-    "migration:up": "node --import tsx/esm node_modules/@mikro-orm/cli/cli.js migration:up"
+    "migration:up": "tsx run-migration.mts"
   },
   "dependencies": {
     "@mikro-orm/core": "^7.0.14",

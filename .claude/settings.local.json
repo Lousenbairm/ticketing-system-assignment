@@ -4,7 +4,9 @@
       "Bash(docker info *)",
       "Bash(npm list *)",
       "WebFetch(domain:mikro-orm.io)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(sudo lsof -i :5432)",
+      "Bash(sudo lsof *)"
     ]
   }
 }

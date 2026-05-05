@@ -67,28 +67,29 @@
   - [x] `updatedAt` has `onUpdate: () => new Date()`
 - [x] **2.5** Generate initial migration locally — created manually due to ESM-only `@mikro-orm/core` incompatibility with tsx CJS loader
 - [x] **2.6** Confirm migration file appears in `/migrations/` folder with correct `CREATE TABLE` SQL for the `ticket` table
-- [ ] **2.7** Start containers and apply migration:
+- [x] **2.7** Start containers and apply migration:
   ```
   docker compose up --build -d
   docker compose exec backend npx mikro-orm migration:up
   ```
-- [ ] **2.8** Verify table inside the DB container: `docker compose exec db psql -U postgres -d ticketing -c "\d ticket"` — all columns present including `priority`, `resolved_at`
+  > `migration:up` CLI is broken — MikroORM v7 pure ESM vs CommonJS project incompatibility. Applied SQL directly via psql and inserted row into `mikro_orm_migrations` manually. See NOTES.md for details.
+- [x] **2.8** Verify table inside the DB container: `docker compose exec db psql -U postgres -d ticketing -c "\d ticket"` — all columns present including `priority`, `resolved_at`
 
 ---
 
 ### Stage 3 — Backend: DTOs
 
-- [ ] **3.1** Create `src/tickets/dto/create-ticket.dto.ts`:
-  - [ ] `title`: `@IsNotEmpty()`, `@IsString()`, `@MaxLength(255)`
-  - [ ] `customerName`: `@IsNotEmpty()`, `@IsString()`, `@MaxLength(255)`
-  - [ ] `customerEmail`: `@IsEmail()`
-  - [ ] `description`: `@IsNotEmpty()`, `@IsString()`
-  - [ ] `priority`: `@IsOptional()`, `@IsEnum(TicketPriority)` — optional, backend defaults to MEDIUM
-- [ ] **3.2** Create `src/tickets/dto/update-ticket-status.dto.ts`:
-  - [ ] `status`: `@IsEnum(TicketStatus)`, required
-- [ ] **3.3** Create `src/tickets/dto/list-tickets.dto.ts`:
-  - [ ] `status`: `@IsOptional()`, `@IsEnum(TicketStatus)`
-  - [ ] `q`: `@IsOptional()`, `@IsString()` — keyword search term
+- [x] **3.1** Create `src/tickets/dto/create-ticket.dto.ts`:
+  - [x] `title`: `@IsNotEmpty()`, `@IsString()`, `@MaxLength(255)`
+  - [x] `customerName`: `@IsNotEmpty()`, `@IsString()`, `@MaxLength(255)`
+  - [x] `customerEmail`: `@IsEmail()`
+  - [x] `description`: `@IsNotEmpty()`, `@IsString()`
+  - [x] `priority`: `@IsOptional()`, `@IsEnum(TicketPriority)` — optional, backend defaults to MEDIUM
+- [x] **3.2** Create `src/tickets/dto/update-ticket-status.dto.ts`:
+  - [x] `status`: `@IsEnum(TicketStatus)`, required
+- [x] **3.3** Create `src/tickets/dto/list-tickets.dto.ts`:
+  - [x] `status`: `@IsOptional()`, `@IsEnum(TicketStatus)`
+  - [x] `q`: `@IsOptional()`, `@IsString()` — keyword search term
 
 ---
 

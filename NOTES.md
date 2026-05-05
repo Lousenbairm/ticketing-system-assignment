@@ -56,6 +56,22 @@ This mismatch causes tsx to `require()` packages using ESM resolution rules — 
 
 **Fix**: `tsconfig.mikro-orm.json` overrides `module` to `CommonJS` so tsx uses old-style require() and resolves packages correctly. Only used for the MikroORM CLI, not the app itself.
 
+## MikroORM v7 ESM/CJS Incompatibility — Migration CLI Broken
+
+MikroORM v7 is **pure ESM** (no CommonJS exports). NestJS projects are **CommonJS** by default (no `"type": "module"` in `package.json`). This causes the migration CLI to fail regardless of how tsx is invoked:
+
+- `npx mikro-orm migration:up` — tsx CJS loader can't import ESM-only `@mikro-orm/core`; named exports like `PrimaryKey` come back `undefined`
+- `npm run migration:up` (with `node --import tsx/esm`) — same CJS interop failure
+- `tsx run-migration.mts` — tsx still loads transitive `.ts` imports (entity, config) as CJS because the project has no `"type": "module"`; hits the same wall
+
+**Root cause**: tsx determines module format from file extension (`.mts` → ESM, `.ts` → CJS unless `"type": "module"` in `package.json`). The entity and config are `.ts`, so they're loaded as CJS, which can't import pure-ESM `@mikro-orm/core`.
+
+**Workaround (used here)**: Apply the migration SQL directly via `psql` and manually insert a row into `mikro_orm_migrations` to mark it as applied. Equivalent to `migration:up` for a single initial migration.
+
+**Proper fixes (not done — out of scope for assignment)**:
+- Downgrade to MikroORM v6 — has CJS exports, CLI works normally
+- Add `"type": "module"` to `package.json` — requires full ESM migration of NestJS (non-trivial)
+
 ## cross-env
 
 A utility that sets environment variables in npm scripts cross-platform. Windows uses `set VAR=value`, Mac/Linux uses `VAR=value`. `cross-env` abstracts that so the same npm script works on any OS.
