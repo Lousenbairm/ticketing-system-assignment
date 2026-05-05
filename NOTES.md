@@ -56,6 +56,21 @@ This mismatch causes tsx to `require()` packages using ESM resolution rules — 
 
 **Fix**: `tsconfig.mikro-orm.json` overrides `module` to `CommonJS` so tsx uses old-style require() and resolves packages correctly. Only used for the MikroORM CLI, not the app itself.
 
+## Stage 4.2 — Repository & EntityManager Injection
+
+### `@InjectRepository(Ticket)`
+MikroORM provides a repository per entity — a pre-scoped query object that always operates on the `ticket` table. `@InjectRepository(Ticket)` tells NestJS's DI: "go find the repository registered for the `Ticket` entity and inject it here." It is registered in the module via `MikroOrmModule.forFeature([Ticket])` (Stage 7).
+
+`EntityRepository<Ticket>` gives typed methods like `ticketRepo.find(...)`, `ticketRepo.findOne(...)` scoped to the `Ticket` entity.
+
+### `EntityManager`
+The repository handles *finding* entities. The `EntityManager` (`em`) handles *persisting changes* — `em.persistAndFlush(entity)` to insert, `em.flush()` to commit mutations. Both are needed because:
+- `ticketRepo.find(...)` → reads
+- `em.flush()` → writes (after mutating entity properties directly)
+
+### Why constructor injection?
+NestJS DI works through the constructor. When NestJS instantiates `TicketsService`, it reads the constructor parameter types and decorators, resolves the dependencies from its container, and passes them in. `private readonly` makes them instance properties automatically — no `this.ticketRepo = ticketRepo` needed.
+
 ## MikroORM v7 ESM/CJS Incompatibility — Migration CLI Broken
 
 MikroORM v7 is **pure ESM** (no CommonJS exports). NestJS projects are **CommonJS** by default (no `"type": "module"` in `package.json`). This causes the migration CLI to fail regardless of how tsx is invoked:

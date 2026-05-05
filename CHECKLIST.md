@@ -95,8 +95,8 @@
 
 ### Stage 4 — Backend: Service
 
-- [ ] **4.1** Create `src/tickets/tickets.service.ts` with `@Injectable()`
-- [ ] **4.2** Inject `EntityRepository<Ticket>` via `@InjectRepository(Ticket)` and `EntityManager`
+- [x] **4.1** Create `src/tickets/tickets.service.ts` with `@Injectable()`
+- [x] **4.2** Inject `EntityRepository<Ticket>` via `@InjectRepository(Ticket)` and `EntityManager`
 - [ ] **4.3** Implement `create(dto)`:
   - [ ] Spread DTO fields onto new entity, force `status: TicketStatus.OPEN` regardless of input
   - [ ] `persistAndFlush` and return the created ticket
