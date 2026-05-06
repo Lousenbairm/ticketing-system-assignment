@@ -125,87 +125,87 @@
 
 ### Stage 5 — Backend: Scheduler
 
-- [ ] **5.1** Create `src/tickets/tickets.scheduler.ts` with `@Injectable()`
-- [ ] **5.2** Inject `TicketsService` and `ConfigService`
-- [ ] **5.3** Add `private readonly logger = new Logger(TicketsScheduler.name)`
-- [ ] **5.4** Implement `handleAutoClose()` with `@Cron('0 2 * * *')`:
-  - [ ] Read `AUTO_CLOSE_DAYS` from config with `configService.get<number>('AUTO_CLOSE_DAYS', 3)`
-  - [ ] Wrap in `Number()` to ensure numeric type
-  - [ ] Log start with threshold: `Auto-close cron started. Threshold: X days`
-  - [ ] Call `ticketsService.autoCloseResolved(days)`
-  - [ ] Log result: `Auto-close cron completed. Tickets closed: N`
+- [x] **5.1** Create `src/tickets/tickets.scheduler.ts` with `@Injectable()`
+- [x] **5.2** Inject `TicketsService` and `ConfigService`
+- [x] **5.3** Add `private readonly logger = new Logger(TicketsScheduler.name)`
+- [x] **5.4** Implement `handleAutoClose()` with `@Cron('0 2 * * *')`:
+  - [x] Read `AUTO_CLOSE_DAYS` from config with `configService.get<number>('AUTO_CLOSE_DAYS', 3)`
+  - [x] Wrap in `Number()` to ensure numeric type
+  - [x] Log start with threshold: `Auto-close cron started. Threshold: X days`
+  - [x] Call `ticketsService.autoCloseResolved(days)`
+  - [x] Log result: `Auto-close cron completed. Tickets closed: N`
 
 ---
 
 ### Stage 6 — Backend: Controller
 
-- [ ] **6.1** Create `src/tickets/tickets.controller.ts` with `@Controller('tickets')`
-- [ ] **6.2** Implement `POST /tickets`:
-  - [ ] `@Post()`, `@HttpCode(HttpStatus.CREATED)`
-  - [ ] `@Body() dto: CreateTicketDto` — calls `ticketsService.create(dto)`
-- [ ] **6.3** Implement `GET /tickets`:
-  - [ ] `@Get()`, `@Query() query: ListTicketsDto` — calls `ticketsService.findAll(query)`
-- [ ] **6.4** Implement `GET /tickets/:id`:
-  - [ ] `@Get(':id')`, `@Param('id', ParseUUIDPipe) id: string` — calls `ticketsService.findOne(id)`
-  - [ ] `ParseUUIDPipe` returns 400 automatically if id is not valid UUID format
-- [ ] **6.5** Implement `PUT /tickets/:id/status`:
-  - [ ] `@Put(':id/status')`, `@Param('id', ParseUUIDPipe)`, `@Body() dto: UpdateTicketStatusDto`
-  - [ ] Calls `ticketsService.updateStatus(id, dto)`
+- [x] **6.1** Create `src/tickets/tickets.controller.ts` with `@Controller('tickets')`
+- [x] **6.2** Implement `POST /tickets`:
+  - [x] `@Post()`, `@HttpCode(HttpStatus.CREATED)`
+  - [x] `@Body() dto: CreateTicketDto` — calls `ticketsService.create(dto)`
+- [x] **6.3** Implement `GET /tickets`:
+  - [x] `@Get()`, `@Query() query: ListTicketsDto` — calls `ticketsService.findAll(query)`
+- [x] **6.4** Implement `GET /tickets/:id`:
+  - [x] `@Get(':id')`, `@Param('id', ParseUUIDPipe) id: string` — calls `ticketsService.findOne(id)`
+  - [x] `ParseUUIDPipe` returns 400 automatically if id is not valid UUID format
+- [x] **6.5** Implement `PUT /tickets/:id/status`:
+  - [x] `@Put(':id/status')`, `@Param('id', ParseUUIDPipe)`, `@Body() dto: UpdateTicketStatusDto`
+  - [x] Calls `ticketsService.updateStatus(id, dto)`
 
 ---
 
 ### Stage 7 — Backend: Module & App Wiring
 
-- [ ] **7.1** Create `src/tickets/tickets.module.ts`:
-  - [ ] `MikroOrmModule.forFeature([Ticket])` in imports
-  - [ ] `TicketsController` in controllers
-  - [ ] `TicketsService` and `TicketsScheduler` in providers
-- [ ] **7.2** Replace `src/app.module.ts`:
-  - [ ] `ConfigModule.forRoot({ isGlobal: true })` — first import
-  - [ ] `MikroOrmModule.forRootAsync` — useFactory reads DB config from `ConfigService`
-  - [ ] Set `autoLoadEntities: true` in MikroORM options
-  - [ ] `ScheduleModule.forRoot()`
-  - [ ] `TicketsModule`
-  - [ ] Remove `AppController` and `AppService` from module
-- [ ] **7.3** Update `src/main.ts`:
-  - [ ] Add `app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))`
-  - [ ] Add `app.enableCors({ origin: 'http://localhost:5173' })`
-- [ ] **7.4** Delete unused `src/app.controller.ts`, `src/app.service.ts`, `src/app.controller.spec.ts`
+- [x] **7.1** Create `src/tickets/tickets.module.ts`:
+  - [x] `MikroOrmModule.forFeature([Ticket])` in imports
+  - [x] `TicketsController` in controllers
+  - [x] `TicketsService` and `TicketsScheduler` in providers
+- [x] **7.2** Replace `src/app.module.ts`:
+  - [x] `ConfigModule.forRoot({ isGlobal: true })` — first import
+  - [x] `MikroOrmModule.forRootAsync` — useFactory reads DB config from `ConfigService`
+  - [x] Set `autoLoadEntities: true` in MikroORM options
+  - [x] `ScheduleModule.forRoot()`
+  - [x] `TicketsModule`
+  - [x] Remove `AppController` and `AppService` from module
+- [x] **7.3** Update `src/main.ts`:
+  - [x] Add `app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))`
+  - [x] Add `app.enableCors({ origin: 'http://localhost:5173' })`
+- [x] **7.4** Delete unused `src/app.controller.ts`, `src/app.service.ts`, `src/app.controller.spec.ts`
 
 ---
 
 ### Stage 8 — Backend: Unit Tests
 
-- [ ] **8.1** Create `src/tickets/tickets.service.spec.ts`
-- [ ] **8.2** Mock `EntityRepository<Ticket>` with jest functions: `create`, `find`, `findOne`, `findAll`
-- [ ] **8.3** Mock `EntityManager` with jest function: `persistAndFlush`, `flush`
-- [ ] **8.4** Write and pass test: `create()` returns ticket with `status=OPEN` and `priority=MEDIUM`
-- [ ] **8.5** Write and pass test: `updateStatus()` OPEN→IN_PROGRESS succeeds, returns ticket with new status
-- [ ] **8.6** Write and pass test: `updateStatus()` OPEN→RESOLVED throws `BadRequestException`
-- [ ] **8.7** Write and pass test: `updateStatus()` IN_PROGRESS→CLOSED throws `BadRequestException` with "scheduler" in message
-- [ ] **8.8** Write and pass test: `updateStatus()` IN_PROGRESS→RESOLVED sets `resolvedAt` to a Date
-- [ ] **8.9** Write and pass test: `autoCloseResolved(3)` — given ticket with `resolvedAt` 4 days ago → sets status CLOSED, returns 1
-- [ ] **8.10** Write and pass test: `autoCloseResolved(3)` — given ticket with `resolvedAt` 2 days ago → does not close, returns 0
-- [ ] **8.11** Run `npm test` — all tests pass with no errors
+- [x] **8.1** Create `src/tickets/tickets.service.spec.ts`
+- [x] **8.2** Mock `EntityRepository<Ticket>` with jest functions: `create`, `find`, `findOne`, `findAll`
+- [x] **8.3** Mock `EntityManager` with jest function: `persistAndFlush`, `flush`
+- [x] **8.4** Write and pass test: `create()` returns ticket with `status=OPEN` and `priority=MEDIUM`
+- [x] **8.5** Write and pass test: `updateStatus()` OPEN→IN_PROGRESS succeeds, returns ticket with new status
+- [x] **8.6** Write and pass test: `updateStatus()` OPEN→RESOLVED throws `BadRequestException`
+- [x] **8.7** Write and pass test: `updateStatus()` IN_PROGRESS→CLOSED throws `BadRequestException` with "scheduler" in message
+- [x] **8.8** Write and pass test: `updateStatus()` IN_PROGRESS→RESOLVED sets `resolvedAt` to a Date
+- [x] **8.9** Write and pass test: `autoCloseResolved(3)` — given ticket with `resolvedAt` 4 days ago → sets status CLOSED, returns 1
+- [x] **8.10** Write and pass test: `autoCloseResolved(3)` — given ticket with `resolvedAt` 2 days ago → does not close, returns 0
+- [x] **8.11** Run `npm test` — all tests pass with no errors
 
 ---
 
 ### Stage 9 — Backend: Smoke Test
 
-- [ ] **9.1** Ensure all containers are running: `docker compose ps` — `db`, `backend`, `frontend` all show status `Up`; check backend logs for no errors: `docker compose logs backend`
-- [ ] **9.2** `POST http://localhost:3000/tickets` with valid body → `201` response, UUID `id` present
-- [ ] **9.3** `POST http://localhost:3000/tickets` with missing `title` → `400` with validation message
-- [ ] **9.4** `POST http://localhost:3000/tickets` with invalid email → `400` with validation message
-- [ ] **9.5** `GET http://localhost:3000/tickets` → `200` array (contains ticket from 9.2)
-- [ ] **9.6** `GET http://localhost:3000/tickets?status=OPEN` → `200` array containing only OPEN tickets
-- [ ] **9.7** `GET http://localhost:3000/tickets?q=<part-of-title>` → `200` filtered array
-- [ ] **9.8** `GET http://localhost:3000/tickets/<uuid-from-9.2>` → `200` single ticket object
-- [ ] **9.9** `GET http://localhost:3000/tickets/not-a-uuid` → `400` (ParseUUIDPipe rejection)
-- [ ] **9.10** `GET http://localhost:3000/tickets/00000000-0000-0000-0000-000000000000` → `404` with "not found" message
-- [ ] **9.11** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"RESOLVED"}` on OPEN ticket → `400` (skip not allowed)
-- [ ] **9.12** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"CLOSED"}` → `400` (cron-only message)
-- [ ] **9.13** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"IN_PROGRESS"}` → `200`, status updated
-- [ ] **9.14** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"RESOLVED"}` on IN_PROGRESS ticket → `200`, `resolvedAt` is now set
+- [x] **9.1** Ensure all containers are running: `docker compose ps` — `db`, `backend`, `frontend` all show status `Up`; check backend logs for no errors: `docker compose logs backend`
+- [x] **9.2** `POST http://localhost:3000/tickets` with valid body → `201` response, UUID `id` present
+- [x] **9.3** `POST http://localhost:3000/tickets` with missing `title` → `400` with validation message
+- [x] **9.4** `POST http://localhost:3000/tickets` with invalid email → `400` with validation message
+- [x] **9.5** `GET http://localhost:3000/tickets` → `200` array (contains ticket from 9.2)
+- [x] **9.6** `GET http://localhost:3000/tickets?status=OPEN` → `200` array containing only OPEN tickets
+- [x] **9.7** `GET http://localhost:3000/tickets?q=<part-of-title>` → `200` filtered array
+- [x] **9.8** `GET http://localhost:3000/tickets/<uuid-from-9.2>` → `200` single ticket object
+- [x] **9.9** `GET http://localhost:3000/tickets/not-a-uuid` → `400` (ParseUUIDPipe rejection)
+- [x] **9.10** `GET http://localhost:3000/tickets/00000000-0000-0000-0000-000000000000` → `404` with "not found" message
+- [x] **9.11** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"RESOLVED"}` on OPEN ticket → `400` (skip not allowed)
+- [x] **9.12** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"CLOSED"}` → `400` (cron-only message)
+- [x] **9.13** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"IN_PROGRESS"}` → `200`, status updated
+- [x] **9.14** `PUT http://localhost:3000/tickets/<id>/status` body `{"status":"RESOLVED"}` on IN_PROGRESS ticket → `200`, `resolvedAt` is now set
 
 ---
 

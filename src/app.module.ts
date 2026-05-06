@@ -1,10 +1,27 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { PostgreSqlDriver } from '@mikro-orm/postgresql';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    MikroOrmModule.forRootAsync({
+      useFactory: (config: ConfigService) => ({
+        driver: PostgreSqlDriver as any,
+        host: config.get('DATABASE_HOST', 'localhost'),
+        port: config.get<number>('DATABASE_PORT', 5432),
+        dbName: config.get('DATABASE_NAME', 'ticketing'),
+        user: config.get('DATABASE_USER', 'postgres'),
+        password: config.get('DATABASE_PASSWORD', 'postgres'),
+        autoLoadEntities: true,
+      }),
+      inject: [ConfigService],
+    }),
+    ScheduleModule.forRoot(),
+    TicketsModule,
+  ],
 })
 export class AppModule {}

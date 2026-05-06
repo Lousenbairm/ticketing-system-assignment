@@ -34,8 +34,8 @@ export class TicketsService {
     if (query.status) where.status = query.status;
     if (query.q) {
       where.$or = [
-        { title: { $like: `%${query.q}%` } },
-        { description: { $like: `%${query.q}%` } },
+        { title: { $ilike: `%${query.q}%` } },
+        { description: { $ilike: `%${query.q}%` } },
       ];
     }
     return this.ticketRepo.findAll({ where, orderBy: { createdAt: 'DESC' } });

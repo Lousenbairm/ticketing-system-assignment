@@ -1,4 +1,4 @@
-import { Entity, Enum, Opt, PrimaryKey, Property } from '@mikro-orm/core';
+import { defineEntity, InferEntity, p } from '@mikro-orm/core';
 import { v4 as uuidv4 } from 'uuid';
 
 export enum TicketStatus {
@@ -14,35 +14,22 @@ export enum TicketPriority {
   HIGH = 'HIGH',
 }
 
-@Entity()
-export class Ticket {
-  @PrimaryKey({ type: 'uuid' })
-  id: string & Opt = uuidv4();
+export const Ticket = defineEntity({
+  name: 'Ticket',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv4()),
+    title: p.string(),
+    customerName: p.string(),
+    customerEmail: p.string(),
+    description: p.text(),
+    status: p.enum(() => TicketStatus).default(TicketStatus.OPEN),
+    priority: p.enum(() => TicketPriority).default(TicketPriority.MEDIUM),
+    createdAt: p.type(Date).onCreate(() => new Date()),
+    resolvedAt: p.type(Date).nullable(),
+    updatedAt: p.type(Date).onUpdate(() => new Date()).onCreate(() => new Date()),
+  },
+});
 
-  @Property()
-  title!: string;
-
-  @Property()
-  customerName!: string;
-
-  @Property()
-  customerEmail!: string;
-
-  @Property({ type: 'text' })
-  description!: string;
-
-  @Enum(() => TicketStatus)
-  status: TicketStatus & Opt = TicketStatus.OPEN;
-
-  @Enum(() => TicketPriority)
-  priority: TicketPriority & Opt = TicketPriority.MEDIUM;
-
-  @Property()
-  createdAt: Date & Opt = new Date();
-
-  @Property({ nullable: true })
-  resolvedAt?: Date;
-
-  @Property({ onUpdate: () => new Date() })
-  updatedAt: Date & Opt = new Date();
-}
+// Ticket as value = entity schema (for DI tokens, forFeature, etc.)
+// Ticket as type = entity instance shape (for type annotations)
+export type Ticket = InferEntity<typeof Ticket>;

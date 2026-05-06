@@ -1,5 +1,55 @@
 # Notes
 
+## Test Results
+
+### Unit Tests — `npm test` (Stage 8)
+
+Run locally (not in Docker). All 8 tests pass.
+
+```
+PASS src/tickets/tickets.service.spec.ts
+  TicketsService
+    create
+      ✓ sets status=OPEN and priority=MEDIUM by default
+    updateStatus
+      ✓ OPEN → IN_PROGRESS succeeds
+      ✓ OPEN → RESOLVED throws (skipped step)
+      ✓ any → CLOSED throws with scheduler message
+      ✓ IN_PROGRESS → RESOLVED sets resolvedAt
+    autoCloseResolved
+      ✓ closes ticket with resolvedAt older than threshold
+      ✓ returns 0 and skips flush when no tickets match
+    findOne
+      ✓ throws NotFoundException when ticket missing
+
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+```
+
+---
+
+### Backend Smoke Tests — Stage 9
+
+All containers running (`db`, `backend`, `frontend`). Backend at `http://localhost:3000`.
+
+| # | Request | Expected | Result |
+|---|---------|----------|--------|
+| 9.2 | `POST /tickets` valid body | 201 + UUID `id`, `status=OPEN` | ✅ |
+| 9.3 | `POST /tickets` missing `title` | 400 validation error | ✅ |
+| 9.4 | `POST /tickets` invalid email | 400 validation error | ✅ |
+| 9.5 | `GET /tickets` | 200 array | ✅ |
+| 9.6 | `GET /tickets?status=OPEN` | 200 OPEN-only array | ✅ |
+| 9.7 | `GET /tickets?q=login` | 200 filtered (case-insensitive) | ✅ |
+| 9.8 | `GET /tickets/:id` | 200 single ticket | ✅ |
+| 9.9 | `GET /tickets/not-a-uuid` | 400 (ParseUUIDPipe) | ✅ |
+| 9.10 | `GET /tickets/00000000-…` | 404 not found | ✅ |
+| 9.11 | `PUT /tickets/:id/status` OPEN→RESOLVED | 400 (skipped step) | ✅ |
+| 9.12 | `PUT /tickets/:id/status` →CLOSED | 400 "auto-closed by scheduler only" | ✅ |
+| 9.13 | `PUT /tickets/:id/status` OPEN→IN_PROGRESS | 200, `status=IN_PROGRESS` | ✅ |
+| 9.14 | `PUT /tickets/:id/status` IN_PROGRESS→RESOLVED | 200, `resolvedAt` set | ✅ |
+
+---
+
 ## Migrations
 Migrations are versioned SQL scripts that modify the database schema in a controlled, reproducible way. MikroORM generates them by reading your `Ticket` entity TypeScript source and producing the equivalent SQL (e.g. `CREATE TABLE "ticket" (...)`).
 
@@ -106,6 +156,154 @@ MikroORM v7 is **pure ESM** (no CommonJS exports). NestJS projects are **CommonJ
 **Proper fixes (not done — out of scope for assignment)**:
 - Downgrade to MikroORM v6 — has CJS exports, CLI works normally
 - Add `"type": "module"` to `package.json` — requires full ESM migration of NestJS (non-trivial)
+
+## MikroORM v7 — No Decorator API
+
+MikroORM v7 **removed** the traditional decorator-based entity API (`@Entity`, `@Property`, `@PrimaryKey`, `@Enum`). These no longer exist in `@mikro-orm/core`. Entities must be defined with `defineEntity` + `p` (property builders).
+
+**Old (v5/v6, doesn't work in v7):**
+```typescript
+@Entity()
+class Ticket {
+  @PrimaryKey({ type: 'uuid' }) id = uuidv4();
+  @Property() title!: string;
+  @Enum(() => TicketStatus) status = TicketStatus.OPEN;
+}
+```
+
+**New (v7):**
+```typescript
+import { defineEntity, InferEntity, p } from '@mikro-orm/core';
+
+export const Ticket = defineEntity({
+  name: 'Ticket',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv4()),
+    title: p.string(),
+    status: p.enum(() => TicketStatus).default(TicketStatus.OPEN),
+  },
+});
+export type Ticket = InferEntity<typeof Ticket>;
+```
+
+Key `p` builders: `p.uuid()`, `p.string()`, `p.text()`, `p.type(Date)`, `p.enum(() => EnumObj)`, `p.boolean()`.
+Chain methods: `.primary()`, `.default(value)`, `.nullable()`, `.onCreate(fn)`, `.onUpdate(fn)`.
+
+**`p.date()` vs `p.type(Date)`:** `p.date()` infers value type as `string` (ISO format). Use `p.type(Date)` to get `Date` as the JS value type so `Date` comparisons in `FilterQuery` work correctly.
+
+**`onCreate` callback gotcha:** The `onCreate` callback receives `(entity, em)`. Passing `uuidv4` directly breaks because uuid v14 treats the second argument as a buffer. Always wrap: `onCreate(() => uuidv4())`.
+
+## tsconfig.build.json — CommonJS override for NestJS
+
+NestJS requires `module: CommonJS`. The project's base `tsconfig.json` used `nodenext` (incompatible with `@mikro-orm/core` v7 types). Fix in `tsconfig.build.json`:
+```json
+{
+  "compilerOptions": { "module": "CommonJS", "moduleResolution": "Node" },
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "frontend", "run-migration.mts", "migrations"]
+}
+```
+The `exclude` list prevents the NestJS compiler from picking up frontend JSX files and migration scripts.
+
+## Jest + ESM packages — Unit Test Workaround
+
+Jest runs in CommonJS mode by default. Three packages in this project are pure ESM and cannot be `require()`d by Jest:
+
+| Package | Why it fails |
+|---------|-------------|
+| `@mikro-orm/core` | Pure ESM; also uses `import.meta` which CJS transpilation cannot handle |
+| `@mikro-orm/nestjs` | Pure ESM (`export * from './...'` at top of index.js) |
+| `uuid` v14 | Pure ESM |
+
+**Fix applied in `tickets.service.spec.ts`:**
+```typescript
+// At the very top of the spec file — jest.mock() calls are hoisted above imports
+jest.mock('@mikro-orm/nestjs', () => ({
+  InjectRepository: () => () => {},
+}));
+jest.mock('@mikro-orm/core', () => {
+  const noop = () => () => {};
+  return { Entity: noop, Property: noop, PrimaryKey: noop, Enum: noop,
+           EntityRepository: class {}, EntityManager: class {} };
+});
+```
+
+**Fix applied in `package.json` jest config:**
+```json
+"transformIgnorePatterns": ["/node_modules/(?!uuid)"]
+```
+This tells ts-jest to transform `uuid` (instead of leaving it as-is), solving the ESM import error.
+
+**Why not use TestingModule?** `@nestjs/testing`'s `Test.createTestingModule` imports `@mikro-orm/nestjs` internally for DI token resolution. The mock intercepts it before it loads. The service is instantiated directly:
+```typescript
+service = new TicketsService(repo as any, em as any);
+```
+
+**The DI injection token:** `@InjectRepository(Ticket)` uses the token `'TicketRepository'` (entity name + `'Repository'`). This is deterministic — no need to import `getRepositoryToken` from the ESM-only package.
+
+---
+
+## PostgreSqlDriver type incompatibility — `as any` cast
+
+`@mikro-orm/nestjs@7.0.1` and `@mikro-orm/postgresql@7.0.14` have a type mismatch: `SqlSchemaGenerator` in `@mikro-orm/postgresql` is missing `refresh` and `ensureIndexes` from the `ISchemaGenerator` interface that `@mikro-orm/nestjs` expects.
+
+**Symptom:** TypeScript error in `app.module.ts`:
+```
+Type 'typeof PostgreSqlDriver' is not assignable to type ...
+Type 'SqlSchemaGenerator' is missing ... 'refresh', 'ensureIndexes'
+```
+
+**Fix:** Cast the driver to bypass the version mismatch:
+```typescript
+driver: PostgreSqlDriver as any,
+```
+This is safe — the driver IS correct at runtime, it's purely a TypeScript interface version skew.
+
+---
+
+## Case-sensitive search — `$like` vs `$ilike`
+
+PostgreSQL's `LIKE` operator is case-sensitive. `WHERE title LIKE '%login%'` will NOT match `'Login bug'`.
+
+**Fix:** Use `$ilike` (case-insensitive LIKE) in the service:
+```typescript
+where.$or = [
+  { title: { $ilike: `%${query.q}%` } },
+  { description: { $ilike: `%${query.q}%` } },
+];
+```
+`$ilike` is PostgreSQL-specific. It compiles to `ILIKE` in the SQL. MikroORM supports it for PostgreSQL drivers.
+
+---
+
+## `.env` — DATABASE_PASSWORD must not be empty
+
+The `.env` file originally had `DATABASE_PASSWORD=` (empty string). PostgreSQL with `scram-sha-256` authentication (default in Postgres 14+) **rejects empty passwords** — the `pg` client throws:
+
+```
+SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
+```
+
+The Docker DB service was initialized with `POSTGRES_PASSWORD: postgres`, so the password in `.env` must also be `postgres`.
+
+**`.env` correct values:**
+```
+DATABASE_PASSWORD=postgres
+```
+
+---
+
+## `docker compose restart` vs `docker compose up -d` — env_file reloading
+
+`docker compose restart` restarts a running container **without re-reading `env_file`**. The environment variables are baked in at container creation time.
+
+To pick up `.env` changes, you must **recreate** the container:
+```bash
+docker compose up -d backend    # recreates + starts with new env
+```
+
+`up -d` detects that the config changed and recreates automatically. `restart` just stops/starts the existing container.
+
+---
 
 ## cross-env
 
