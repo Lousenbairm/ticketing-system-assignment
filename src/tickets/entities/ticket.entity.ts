@@ -1,4 +1,4 @@
-import { Entity, Enum, PrimaryKey, Property } from '@mikro-orm/core';
+import { Entity, Enum, Opt, PrimaryKey, Property } from '@mikro-orm/core';
 import { v4 as uuidv4 } from 'uuid';
 
 export enum TicketStatus {
@@ -17,7 +17,7 @@ export enum TicketPriority {
 @Entity()
 export class Ticket {
   @PrimaryKey({ type: 'uuid' })
-  id: string = uuidv4();
+  id: string & Opt = uuidv4();
 
   @Property()
   title!: string;
@@ -32,17 +32,17 @@ export class Ticket {
   description!: string;
 
   @Enum(() => TicketStatus)
-  status: TicketStatus = TicketStatus.OPEN;
+  status: TicketStatus & Opt = TicketStatus.OPEN;
 
   @Enum(() => TicketPriority)
-  priority: TicketPriority = TicketPriority.MEDIUM;
+  priority: TicketPriority & Opt = TicketPriority.MEDIUM;
 
   @Property()
-  createdAt: Date = new Date();
+  createdAt: Date & Opt = new Date();
 
   @Property({ nullable: true })
   resolvedAt?: Date;
 
   @Property({ onUpdate: () => new Date() })
-  updatedAt: Date = new Date();
+  updatedAt: Date & Opt = new Date();
 }

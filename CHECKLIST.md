@@ -97,29 +97,29 @@
 
 - [x] **4.1** Create `src/tickets/tickets.service.ts` with `@Injectable()`
 - [x] **4.2** Inject `EntityRepository<Ticket>` via `@InjectRepository(Ticket)` and `EntityManager`
-- [ ] **4.3** Implement `create(dto)`:
-  - [ ] Spread DTO fields onto new entity, force `status: TicketStatus.OPEN` regardless of input
-  - [ ] `persistAndFlush` and return the created ticket
-- [ ] **4.4** Implement `findAll(query)`:
-  - [ ] Build `where` object: add `status` if provided
-  - [ ] Add `$or: [{ title: { $like: '%q%' } }, { description: { $like: '%q%' } }]` if `q` provided
-  - [ ] Return `findAll({ where, orderBy: { createdAt: 'DESC' } })`
-- [ ] **4.5** Implement `findOne(id)`:
-  - [ ] `findOne(id)` — throw `NotFoundException` with message `Ticket ${id} not found` if null
-- [ ] **4.6** Implement `updateStatus(id, dto)`:
-  - [ ] Call `findOne(id)` to get ticket (re-uses 404 logic)
-  - [ ] Define `VALID_TRANSITIONS` map: `{ OPEN: IN_PROGRESS, IN_PROGRESS: RESOLVED }` — RESOLVED and CLOSED have no entry
-  - [ ] If `dto.status === TicketStatus.CLOSED` → throw `BadRequestException('Tickets are auto-closed by the scheduler only')`
-  - [ ] If `VALID_TRANSITIONS[ticket.status] !== dto.status` → throw `BadRequestException('Cannot transition from X to Y. Allowed: Z')`
-  - [ ] Set `ticket.status = dto.status`
-  - [ ] If new status is `RESOLVED`, set `ticket.resolvedAt = new Date()`
-  - [ ] `em.flush()` and return updated ticket
-- [ ] **4.7** Implement `autoCloseResolved(days)`:
-  - [ ] Compute `cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days)`
-  - [ ] Query: `{ status: RESOLVED, resolvedAt: { $lte: cutoff } }`
-  - [ ] Loop and set each ticket's status to CLOSED
-  - [ ] Call `em.flush()` only if `tickets.length > 0`
-  - [ ] Return `tickets.length`
+- [x] **4.3** Implement `create(dto)`:
+  - [x] Spread DTO fields onto new entity, force `status: TicketStatus.OPEN` regardless of input
+  - [x] `persistAndFlush` and return the created ticket
+- [x] **4.4** Implement `findAll(query)`:
+  - [x] Build `where` object: add `status` if provided
+  - [x] Add `$or: [{ title: { $like: '%q%' } }, { description: { $like: '%q%' } }]` if `q` provided
+  - [x] Return `findAll({ where, orderBy: { createdAt: 'DESC' } })`
+- [x] **4.5** Implement `findOne(id)`:
+  - [x] `findOne(id)` — throw `NotFoundException` with message `Ticket ${id} not found` if null
+- [x] **4.6** Implement `updateStatus(id, dto)`:
+  - [x] Call `findOne(id)` to get ticket (re-uses 404 logic)
+  - [x] Define `VALID_TRANSITIONS` map: `{ OPEN: IN_PROGRESS, IN_PROGRESS: RESOLVED }` — RESOLVED and CLOSED have no entry
+  - [x] If `dto.status === TicketStatus.CLOSED` → throw `BadRequestException('Tickets are auto-closed by the scheduler only')`
+  - [x] If `VALID_TRANSITIONS[ticket.status] !== dto.status` → throw `BadRequestException('Cannot transition from X to Y. Allowed: Z')`
+  - [x] Set `ticket.status = dto.status`
+  - [x] If new status is `RESOLVED`, set `ticket.resolvedAt = new Date()`
+  - [x] `em.flush()` and return updated ticket
+- [x] **4.7** Implement `autoCloseResolved(days)`:
+  - [x] Compute `cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days)`
+  - [x] Query: `{ status: RESOLVED, resolvedAt: { $lte: cutoff } }`
+  - [x] Loop and set each ticket's status to CLOSED
+  - [x] Call `em.flush()` only if `tickets.length > 0`
+  - [x] Return `tickets.length`
 
 ---
 

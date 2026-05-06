@@ -36,6 +36,26 @@ The TypeScript class representing the `ticket` table. MikroORM reads the decorat
 
 **Dependency chain:** entity → config → migration → table exists → app works.
 
+## CJS vs ESM — Simple Explanation
+
+Node.js has two module systems:
+- **CommonJS (CJS)** — old style, uses `require()`. Default for most projects.
+- **ESM** — modern style, uses `import/export`. Requires opt-in (`"type":"module"` in package.json).
+
+They don't mix well. CJS cannot `require()` a pure-ESM package.
+
+**The clash in this project:**
+- NestJS project → CJS (default)
+- MikroORM v7 → pure ESM
+
+**Why the app still works:** NestJS compiles TypeScript to JS first (`tsc`), then runs it. The compiled output handles imports in a way that avoids the clash at runtime.
+
+**Why the CLI breaks:** `npx mikro-orm migration:up` reads raw `.ts` files directly via `tsx`. It sees a CJS project importing pure-ESM MikroORM — crash.
+
+**Analogy:** CJS and ESM are like two different plug shapes. The app has an adapter (NestJS compiler). The CLI doesn't — it plugs directly and fails.
+
+---
+
 ## TypeScript Transpilers
 Tools that convert TypeScript to JavaScript so Node.js can run it. MikroORM v7 CLI dropped `ts-node` support and now requires one of these:
 
