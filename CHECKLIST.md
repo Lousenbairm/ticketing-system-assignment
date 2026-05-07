@@ -212,93 +212,93 @@
 ### Stage 10 — Frontend: Scaffold & Config
 
 - [x] **10.1** From project root: `npm create vite@latest frontend -- --template react-ts`
-- [ ] **10.2** Install locally for IDE support: `cd frontend && npm install zustand antd axios`
-- [ ] **10.3** Create `frontend/.env` with `VITE_API_URL=http://localhost:3000` (browser-facing URL, not Docker internal)
+- [x] **10.2** Install locally for IDE support: `cd frontend && npm install zustand antd axios`
+- [x] **10.3** Create `frontend/.env` with `VITE_API_URL=http://localhost:3000` (browser-facing URL, not Docker internal)
 - [x] **10.4** Confirm `frontend/src/main.tsx` and `frontend/src/App.tsx` exist from scaffold
 
 ---
 
 ### Stage 11 — Frontend: Types & API Layer
 
-- [ ] **11.1** Create `frontend/src/types/ticket.types.ts`:
-  - [ ] `TicketStatus` type union: `'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'`
-  - [ ] `TicketPriority` type union: `'LOW' | 'MEDIUM' | 'HIGH'`
-  - [ ] `Ticket` interface with all 9 fields (id, title, customerName, customerEmail, description, status, priority, createdAt, resolvedAt?, updatedAt)
-  - [ ] `CreateTicketPayload` interface (title, customerName, customerEmail, description, priority?)
-  - [ ] `NEXT_STATUS` map — `RESOLVED` and `CLOSED` map to `null` (cron-only)
-  - [ ] `STATUS_LABELS` map — human-readable strings for each status
-  - [ ] `STATUS_COLORS` map — Ant Design tag colors for each status
-  - [ ] `PRIORITY_COLORS` map — Ant Design tag colors for LOW/MEDIUM/HIGH
-- [ ] **11.2** Create `frontend/src/api/tickets.ts`:
-  - [ ] Axios instance with `baseURL: import.meta.env.VITE_API_URL`
-  - [ ] `list(status?, q?)` → `GET /tickets` with params — returns `Ticket[]`
-  - [ ] `get(id)` → `GET /tickets/:id` — returns `Ticket`
-  - [ ] `create(payload)` → `POST /tickets` — returns `Ticket`
-  - [ ] `updateStatus(id, status)` → `PUT /tickets/:id/status` — returns `Ticket`
+- [x] **11.1** Create `frontend/src/types/ticket.types.ts`:
+  - [x] `TicketStatus` type union: `'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'`
+  - [x] `TicketPriority` type union: `'LOW' | 'MEDIUM' | 'HIGH'`
+  - [x] `Ticket` interface with all 9 fields (id, title, customerName, customerEmail, description, status, priority, createdAt, resolvedAt?, updatedAt)
+  - [x] `CreateTicketPayload` interface (title, customerName, customerEmail, description, priority?)
+  - [x] `NEXT_STATUS` map — `RESOLVED` and `CLOSED` map to `null` (cron-only)
+  - [x] `STATUS_LABELS` map — human-readable strings for each status
+  - [x] `STATUS_COLORS` map — Ant Design tag colors for each status
+  - [x] `PRIORITY_COLORS` map — Ant Design tag colors for LOW/MEDIUM/HIGH
+- [x] **11.2** Create `frontend/src/api/tickets.ts`:
+  - [x] Axios instance with `baseURL: import.meta.env.VITE_API_URL`
+  - [x] `list(status?, q?)` → `GET /tickets` with params — returns `Ticket[]`
+  - [x] `get(id)` → `GET /tickets/:id` — returns `Ticket`
+  - [x] `create(payload)` → `POST /tickets` — returns `Ticket`
+  - [x] `updateStatus(id, status)` → `PUT /tickets/:id/status` — returns `Ticket`
 
 ---
 
 ### Stage 12 — Frontend: Zustand Store
 
-- [ ] **12.1** Create `frontend/src/store/ticketStore.ts`
-- [ ] **12.2** State shape: `tickets`, `selectedTicket`, `loading`, `error`, `statusFilter`, `searchQuery`
-- [ ] **12.3** Action `fetchTickets(status?, q?)`: sets `loading=true`, calls `ticketsApi.list`, sets `tickets`, handles error into `error` string
-- [ ] **12.4** Action `fetchTicket(id)`: sets `loading=true`, `selectedTicket=null`, calls `ticketsApi.get`, sets `selectedTicket`, handles 404 into `error`
-- [ ] **12.5** Action `createTicket(payload)`: calls `ticketsApi.create`, prepends new ticket to `tickets` list, throws on error (so form can stay open)
-- [ ] **12.6** Action `updateStatus(id, status)`: calls `ticketsApi.updateStatus`, updates both `selectedTicket` and the matching entry in `tickets` array — no refetch needed
-- [ ] **12.7** Action `setFilter(status)`: sets `statusFilter`, immediately calls `fetchTickets(status, searchQuery)`
-- [ ] **12.8** Action `setSearch(q)`: sets `searchQuery`, immediately calls `fetchTickets(statusFilter, q)`
-- [ ] **12.9** Action `clearError()`: sets `error=null`
+- [x] **12.1** Create `frontend/src/store/ticketStore.ts`
+- [x] **12.2** State shape: `tickets`, `selectedTicket`, `loading`, `error`, `statusFilter`, `searchQuery`
+- [x] **12.3** Action `fetchTickets(status?, q?)`: sets `loading=true`, calls `ticketsApi.list`, sets `tickets`, handles error into `error` string
+- [x] **12.4** Action `fetchTicket(id)`: sets `loading=true`, `selectedTicket=null`, calls `ticketsApi.get`, sets `selectedTicket`, handles 404 into `error`
+- [x] **12.5** Action `createTicket(payload)`: calls `ticketsApi.create`, prepends new ticket to `tickets` list, throws on error (so form can stay open)
+- [x] **12.6** Action `updateStatus(id, status)`: calls `ticketsApi.updateStatus`, updates both `selectedTicket` and the matching entry in `tickets` array — no refetch needed
+- [x] **12.7** Action `setFilter(status)`: sets `statusFilter`, immediately calls `fetchTickets(status, searchQuery)`
+- [x] **12.8** Action `setSearch(q)`: sets `searchQuery`, immediately calls `fetchTickets(statusFilter, q)`
+- [x] **12.9** Action `clearError()`: sets `error=null`
 
 ---
 
 ### Stage 13 — Frontend: Components
 
-- [ ] **13.1** Create `frontend/src/components/StatusBadge.tsx`:
-  - [ ] Renders `<Tag color={STATUS_COLORS[status]}>{STATUS_LABELS[status]}</Tag>`
-- [ ] **13.2** Create `frontend/src/components/PriorityBadge.tsx`:
-  - [ ] Renders `<Tag color={PRIORITY_COLORS[priority]}>{priority}</Tag>`
-- [ ] **13.3** Create `frontend/src/components/TicketList.tsx`:
-  - [ ] On mount: call `fetchTickets()` via `useEffect([], [])`
-  - [ ] Ant Design `Tabs` with items: All / OPEN / IN_PROGRESS / RESOLVED / CLOSED — onChange calls `setFilter`
-  - [ ] Ant Design `Input.Search` above table — onSearch calls `setSearch`
-  - [ ] Ant Design `Table` with columns: Title, Customer Name, Email, Priority (`PriorityBadge`), Status (`StatusBadge`), Created (formatted date), Action (View button)
-  - [ ] Table `loading` prop bound to store `loading`
-  - [ ] View button calls `onSelect(record.id)` passed from parent
-  - [ ] `Alert` shown when `error` is non-null, closable via `clearError`
-- [ ] **13.4** Create `frontend/src/components/TicketForm.tsx`:
-  - [ ] Ant Design `Form` with `layout="vertical"`
-  - [ ] Fields: Customer Name (required), Email (required, email rule), Subject/Title (required), Description (required, TextArea), Priority (Select, options LOW/MEDIUM/HIGH, default MEDIUM)
-  - [ ] Submit calls `createTicket(values)`, on success calls `onSuccess()` prop and resets form
-  - [ ] `loading` prop on Submit button bound to store `loading`
-  - [ ] `Alert` shown when `error` is non-null, closable via `clearError`
-- [ ] **13.5** Create `frontend/src/components/TicketDetail.tsx`:
-  - [ ] On mount / when `id` prop changes: call `fetchTicket(id)` via `useEffect([id], [id])`
-  - [ ] Show `<Spin>` while `loading` is true and `selectedTicket` is null
-  - [ ] Show `<Alert>` with Back button if `error` is non-null
-  - [ ] Ant Design `Descriptions` (bordered): Status (StatusBadge), Priority (PriorityBadge), Customer, Email, Description, Created, Resolved (only if resolvedAt is set)
-  - [ ] Back button (top-right of Card) calls `onBack()` prop
-  - [ ] "Move to X" button: shown only if `NEXT_STATUS[ticket.status]` is non-null
-  - [ ] Button label: `Move to ${STATUS_LABELS[NEXT_STATUS[ticket.status]]}`
-  - [ ] Button click: calls `updateStatus(id, next)`, then `message.success('Ticket moved to X')`
-  - [ ] `Alert` shown when `error` is non-null after status update failure
+- [x] **13.1** Create `frontend/src/components/StatusBadge.tsx`:
+  - [x] Renders `<Tag color={STATUS_COLORS[status]}>{STATUS_LABELS[status]}</Tag>`
+- [x] **13.2** Create `frontend/src/components/PriorityBadge.tsx`:
+  - [x] Renders `<Tag color={PRIORITY_COLORS[priority]}>{priority}</Tag>`
+- [x] **13.3** Create `frontend/src/components/TicketList.tsx`:
+  - [x] On mount: call `fetchTickets()` via `useEffect([], [])`
+  - [x] Ant Design `Tabs` with items: All / OPEN / IN_PROGRESS / RESOLVED / CLOSED — onChange calls `setFilter`
+  - [x] Ant Design `Input.Search` above table — onSearch calls `setSearch`
+  - [x] Ant Design `Table` with columns: Title, Customer Name, Email, Priority (`PriorityBadge`), Status (`StatusBadge`), Created (formatted date), Action (View button)
+  - [x] Table `loading` prop bound to store `loading`
+  - [x] View button calls `onSelect(record.id)` passed from parent
+  - [x] `Alert` shown when `error` is non-null, closable via `clearError`
+- [x] **13.4** Create `frontend/src/components/TicketForm.tsx`:
+  - [x] Ant Design `Form` with `layout="vertical"`
+  - [x] Fields: Customer Name (required), Email (required, email rule), Subject/Title (required), Description (required, TextArea), Priority (Select, options LOW/MEDIUM/HIGH, default MEDIUM)
+  - [x] Submit calls `createTicket(values)`, on success calls `onSuccess()` prop and resets form
+  - [x] `loading` prop on Submit button bound to store `loading`
+  - [x] `Alert` shown when `error` is non-null, closable via `clearError`
+- [x] **13.5** Create `frontend/src/components/TicketDetail.tsx`:
+  - [x] On mount / when `id` prop changes: call `fetchTicket(id)` via `useEffect([id], [id])`
+  - [x] Show `<Spin>` while `loading` is true and `selectedTicket` is null
+  - [x] Show `<Alert>` with Back button if `error` is non-null
+  - [x] Ant Design `Descriptions` (bordered): Status (StatusBadge), Priority (PriorityBadge), Customer, Email, Description, Created, Resolved (only if resolvedAt is set)
+  - [x] Back button (top-right of Card) calls `onBack()` prop
+  - [x] "Move to X" button: shown only if `NEXT_STATUS[ticket.status]` is non-null
+  - [x] Button label: `Move to ${STATUS_LABELS[NEXT_STATUS[ticket.status]]}`
+  - [x] Button click: calls `updateStatus(id, next)`, then `message.success('Ticket moved to X')`
+  - [x] `Alert` shown when `error` is non-null after status update failure
 
 ---
 
 ### Stage 14 — Frontend: App Shell & Entry
 
-- [ ] **14.1** Replace `frontend/src/App.tsx`:
-  - [ ] `useState<View>` with discriminated union starting at `{ type: 'list' }`
-  - [ ] Ant Design `Layout` with `Content` centered at max-width 1100px
-  - [ ] Header row: "Support Tickets" title (left) + "New Ticket" button (right, hidden on create view)
-  - [ ] Render `<TicketList onSelect={id => setView({ type: 'detail', id })} />` when view is `list`
-  - [ ] Render `<TicketForm onSuccess={() => setView({ type: 'list' })} />` when view is `create`
-  - [ ] Render `<TicketDetail id={view.id} onBack={() => setView({ type: 'list' })} />` when view is `detail`
-- [ ] **14.2** Update `frontend/src/main.tsx`:
-  - [ ] Import `import 'antd/dist/reset.css'`
-  - [ ] Wrap `<App />` in `<ConfigProvider>`
-- [ ] **14.3** Rebuild and restart containers to pick up new frontend files: `docker compose up --build -d`
-- [ ] **14.4** Confirm frontend container is serving: `docker compose logs frontend` — shows `VITE ... ready` with port 5173; open `http://localhost:5173` in browser — no blank page or console errors
+- [x] **14.1** Replace `frontend/src/App.tsx`:
+  - [x] `useState<View>` with discriminated union starting at `{ type: 'list' }`
+  - [x] Ant Design `Layout` with `Content` centered at max-width 1100px
+  - [x] Header row: "Support Tickets" title (left) + "New Ticket" button (right, hidden on create view)
+  - [x] Render `<TicketList onSelect={id => setView({ type: 'detail', id })} />` when view is `list`
+  - [x] Render `<TicketForm onSuccess={() => setView({ type: 'list' })} />` when view is `create`
+  - [x] Render `<TicketDetail id={view.id} onBack={() => setView({ type: 'list' })} />` when view is `detail`
+- [x] **14.2** Update `frontend/src/main.tsx`:
+  - [x] Import `import 'antd/dist/reset.css'`
+  - [x] Wrap `<App />` in `<ConfigProvider>`
+- [x] **14.3** Rebuild and restart containers to pick up new frontend files: `docker compose up --build -d`
+- [x] **14.4** Confirm frontend container is serving: `docker compose logs frontend` — shows `VITE ... ready` with port 5173; open `http://localhost:5173` in browser — no blank page or console errors
 
 ---
 
@@ -322,6 +322,80 @@
 - [ ] **15.16** Click "Back to List" — list view, ticket shows RESOLVED in status column
 - [ ] **15.17** Stop the backend container: `docker compose stop backend` — click "View" on a ticket — error Alert appears, no crash
 - [ ] **15.18** Restart backend: `docker compose start backend` — refresh page — list reloads correctly
+
+---
+
+### Stage 17 — F1: Robust Search
+
+- [x] **17.1** Update `findAll` in `tickets.service.ts` — extend `$or` to include `customerName` and `customerEmail` (in addition to existing `title`)
+- [x] **17.2** `GET /tickets?q=<customerName fragment>` → 200, returns matching tickets
+- [x] **17.3** `GET /tickets?q=<email fragment>` → 200, returns matching tickets
+- [x] **17.4** Frontend search placeholder updated to reflect new search scope
+
+---
+
+### Stage 18 — F2: Table Column Sorting
+
+- [x] **18.1** Add `sorter` prop to `TicketList.tsx` table columns: Title (alpha), Customer Name (alpha), Priority (LOW < MEDIUM < HIGH), Status (alpha), Created (date)
+- [x] **18.2** Click each sortable column header — table sorts correctly ascending and descending
+- [x] **18.3** Sorting is client-side only — no backend changes
+
+---
+
+### Stage 19 — F3: Admin Entity & Auth Backend
+
+- [x] **19.1** Install packages: `npm install @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt` and `npm install --save-dev @types/passport-jwt @types/bcrypt`
+- [x] **19.2** Add `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRES_IN=24h` to `.env` and `.env.example`
+- [x] **19.3** Create `src/admin/entities/admin.entity.ts` — fields: `id` (uuid), `username` (string), `passwordHash` (string), `createdAt` (Date)
+- [x] **19.4** Create migration for `admin` table: written manually as `Migration20260507000000.ts`, applied via `docker compose exec backend npx mikro-orm migration:up`
+- [x] **19.5** Create `src/admin/admin.seeder.ts` — on app start, if no admin row exists: insert one row using `ADMIN_USERNAME` + bcrypt hash of `ADMIN_PASSWORD`
+- [x] **19.6** Run seeder from `main.ts` after migrations: `await app.get(AdminSeeder).seed()`
+- [x] **19.7** Create `src/auth/auth.module.ts` with `JwtModule.register({ secret, signOptions: { expiresIn } })`
+- [x] **19.8** Create `src/auth/auth.service.ts` — `login(username, password)`: find admin by username, `bcrypt.compare`, return signed JWT with `{ sub: admin.id, username }`
+- [x] **19.9** Create `src/auth/auth.controller.ts` — `POST /auth/login` body `{ username, password }` → `{ access_token }` or 401
+- [x] **19.10** Create `src/auth/jwt.strategy.ts` — `PassportStrategy(Strategy)`, validates Bearer token, attaches `{ id, username }` to `req.user`
+- [x] **19.11** Create `src/auth/jwt-auth.guard.ts` — `AuthGuard('jwt')` wrapper
+- [x] **19.12** Apply `JwtAuthGuard` to `GET /tickets`, `GET /tickets/:id`, `PUT /tickets/:id/status` in `TicketsController`
+- [x] **19.13** Keep `POST /tickets` and `POST /auth/login` public (no guard)
+- [x] **19.14** `POST /auth/login` with correct credentials → 200, `access_token` present
+- [x] **19.15** `POST /auth/login` with wrong password → 401
+- [x] **19.16** `GET /tickets` without token → 401
+- [x] **19.17** `GET /tickets` with valid `Authorization: Bearer <token>` → 200
+
+---
+
+### Stage 20 — F4: Public & Admin UI Split
+
+- [x] **20.1** Extend `View` type in `App.tsx` to: `'public' | 'admin-login' | 'list' | 'detail'`
+- [x] **20.2** App starts at `{ type: 'public' }` by default (check localStorage for existing JWT on load)
+- [x] **20.3** Create `src/components/PublicSubmit.tsx` — ticket submit form, "Admin Login" button top-right → sets view to `admin-login`
+- [x] **20.4** Create `src/components/AdminLogin.tsx` — username + password form, calls `POST /auth/login`, stores JWT in `localStorage`, on success → `{ type: 'list' }`; "Back" button → `{ type: 'public' }`
+- [x] **20.5** Add Axios request interceptor in `api/tickets.ts` — attaches `Authorization: Bearer <token>` from `localStorage` if present
+- [x] **20.6** Admin header shows "Logout" button — clears `localStorage` JWT, sets view to `{ type: 'public' }`
+- [x] **20.7** On 401 response, Axios response interceptor clears JWT and dispatches `unauthorized` event → App redirects to `admin-login`
+- [x] **20.8** Open `http://localhost:5173` — public submit form shown, no ticket list visible
+- [x] **20.9** Click "Admin Login" — login form shown
+- [x] **20.10** Login with correct credentials — redirected to ticket list
+- [x] **20.11** Submit a ticket from public form — 201, success message shown
+- [x] **20.12** Logout — returns to public view
+
+---
+
+### Stage 21 — F5: Soft Delete
+
+- [x] **21.1** Add columns to `Ticket` entity: `deletedAt` (Date, nullable), `deletedBy` (string, nullable), `modifiedBy` (string, nullable)
+- [x] **21.2** Create migration for the 3 new columns
+- [x] **21.3** Add `DELETE /tickets/:id` endpoint to `TicketsController` (guarded by `JwtAuthGuard`)
+- [x] **21.4** Implement `softDelete(id, username)` in `TicketsService` — sets `deletedAt`, `deletedBy`, `modifiedBy`; throws 404 if already deleted
+- [x] **21.5** Update `updateStatus` in `TicketsService` — sets `modifiedBy = username` (passed from controller via `req.user.username`)
+- [x] **21.6** Update `findAll` — default filter adds `deletedAt: null`; accept optional `includeDeleted: boolean` param to skip filter
+- [x] **21.7** Update `findOne` — throws 404 if `deletedAt` is set
+- [x] **21.8** Add `includeDeleted` to `ListTicketsDto` (optional boolean)
+- [x] **21.9** `DELETE /tickets/:id` with valid token → 200, ticket has `deletedAt` set
+- [x] **21.10** `GET /tickets` after delete — deleted ticket no longer appears
+- [x] **21.11** `GET /tickets?includeDeleted=true` — deleted ticket appears
+- [x] **21.12** Add "Delete" button to `TicketDetail.tsx` (admin only) — confirms before calling delete, on success navigates back to list
+- [x] **21.13** Add "Show deleted" toggle to `TicketList.tsx` — re-fetches with `includeDeleted=true`, deleted rows styled with grey/strikethrough
 
 ---
 

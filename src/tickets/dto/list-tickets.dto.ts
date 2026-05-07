@@ -1,4 +1,5 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { TicketStatus } from '../entities/ticket.entity';
 
 export class ListTicketsDto {
@@ -9,4 +10,9 @@ export class ListTicketsDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true')
+  includeDeleted?: boolean;
 }

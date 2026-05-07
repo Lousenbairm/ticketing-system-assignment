@@ -1,5 +1,76 @@
 # Notes
 
+## Docker Commands Reference
+
+| Command | What it does |
+|---------|-------------|
+| `docker compose up --build -d` | Build images and start all containers in background |
+| `docker compose up --build --force-recreate -V frontend -d` | Rebuild + recreate a specific service + renew anonymous volumes (use after adding npm packages) |
+| `docker compose down` | Stop and remove containers (keeps volumes) |
+| `docker compose down -v` | Stop and remove containers + delete all volumes (wipes DB data) |
+| `docker compose restart backend` | Restart a single service — forces watch mode to recompile when file watcher misses a change |
+| `docker compose start backend` | Start a stopped service without rebuilding |
+| `docker compose stop backend` | Stop a single service without removing it |
+| `docker compose ps` | List all containers and their status |
+| `docker compose logs backend` | Show logs for a service |
+| `docker compose logs backend --tail=20` | Show last 20 lines of logs |
+| `docker compose exec backend <cmd>` | Run a command inside a running container |
+| `docker compose exec backend npx mikro-orm migration:up` | Apply pending DB migrations |
+| `docker compose exec db psql -U postgres -d ticketing -c "\d ticket"` | Inspect table schema in PostgreSQL |
+
+### When to use which
+
+| Situation | Command |
+|-----------|---------|
+| First time starting the project | `docker compose up --build -d` |
+| Added new npm package to `package.json` | `docker compose up --build --force-recreate -V <service> -d` |
+| Code change not picked up by watch mode (Windows) | `docker compose restart backend` |
+| Changed `.env` values | `docker compose up -d` (recreates container to reload env) |
+| Fresh start — wipe everything including DB | `docker compose down -v && docker compose up --build -d` |
+| Check if containers are running | `docker compose ps` |
+| Debug a crash or startup error | `docker compose logs <service> --tail=30` |
+
+---
+
+## Docker Bind Mount — How Watch Mode Sees Local File Changes
+
+The `docker-compose.yml` mounts your local project folder directly into the container:
+```yaml
+volumes:
+  - .:/app          # local folder IS the container's /app
+  - /app/node_modules
+```
+
+This means the container is not running a frozen copy of your code. It's reading your files live off your local filesystem. When you edit a file on your machine, the change is immediately visible inside the container at the same path.
+
+This is why:
+- `nest start --watch` inside the backend container recompiles when you save a `.ts` file locally
+- Vite's HMR inside the frontend container hot-reloads the browser when you save a `.tsx` file locally
+
+No rebuild needed for code changes — only rebuild (`docker compose up --build`) when you change `package.json` (new dependencies) or `Dockerfile`.
+
+---
+
+## Docker Anonymous Volume — Stale `node_modules`
+
+Docker Compose supports two volume types:
+- **Bind mount** (`./frontend:/app`) — mounts your local folder into the container. Live changes sync instantly.
+- **Anonymous volume** (`/app/node_modules`) — a Docker-managed volume at a specific path. Used to preserve `node_modules` so the bind mount doesn't overwrite it with your local (potentially empty) `node_modules`.
+
+**The stale volume problem:**
+When you run `docker compose up --build`, Docker rebuilds the image and runs `npm install` — but the anonymous volume from the *previous* container run is reused as-is. If packages were added to `package.json` after the volume was first created, the old volume won't have them, causing `Failed to resolve import` errors in Vite.
+
+**Fix:** Use `-V` (`--renew-anon-volumes`) to discard and recreate anonymous volumes from the freshly built image:
+```bash
+docker compose up --build --force-recreate -V frontend -d
+```
+
+This initializes `/app/node_modules` fresh from the image, which has the latest `npm install` output.
+
+**Rule of thumb:** Any time you add a new npm package to `frontend/package.json`, run with `-V` on the next start to avoid stale volume issues.
+
+---
+
 ## Test Results
 
 ### Unit Tests — `npm test` (Stage 8)
@@ -302,6 +373,31 @@ docker compose up -d backend    # recreates + starts with new env
 ```
 
 `up -d` detects that the config changed and recreates automatically. `restart` just stops/starts the existing container.
+
+---
+
+## MikroORM `em.fork()` — Required in Background Tasks
+
+MikroORM's `EntityManager` is **request-scoped** in NestJS. Each HTTP request gets its own isolated EM workspace that tracks DB changes for that request and cleans up after.
+
+Cron jobs have no request. When a background task uses the injected global `EntityManager` directly, MikroORM refuses with:
+```
+ValidationError: Using global EntityManager instance methods for context specific actions is disallowed.
+```
+
+**Fix:** Call `em.fork()` at the start of the background task. This creates a fresh, isolated copy of the EM just for that job run — same connection pool, own identity map, no interference with active requests.
+
+```typescript
+async autoCloseResolved(days: number): Promise<number> {
+  const em = this.em.fork(); // isolated copy for this cron run
+  const tickets = await em.find(Ticket, { ... });
+  tickets.forEach(t => (t.status = TicketStatus.CLOSED));
+  if (tickets.length) await em.flush();
+  return tickets.length;
+}
+```
+
+**Analogy:** The global EM is a shared office whiteboard. MikroORM won't let a background job write on it while others may be reading. `fork()` gives the job its own private whiteboard — same markers, no interference.
 
 ---
 

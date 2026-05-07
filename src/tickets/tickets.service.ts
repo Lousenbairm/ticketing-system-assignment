@@ -31,11 +31,13 @@ export class TicketsService {
 
   async findAll(query: ListTicketsDto): Promise<Ticket[]> {
     const where: Record<string, unknown> = {};
+    if (!query.includeDeleted) where.deletedAt = null;
     if (query.status) where.status = query.status;
     if (query.q) {
       where.$or = [
         { title: { $ilike: `%${query.q}%` } },
-        { description: { $ilike: `%${query.q}%` } },
+        { customerName: { $ilike: `%${query.q}%` } },
+        { customerEmail: { $ilike: `%${query.q}%` } },
       ];
     }
     return this.ticketRepo.findAll({ where, orderBy: { createdAt: 'DESC' } });
@@ -43,11 +45,11 @@ export class TicketsService {
 
   async findOne(id: string): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne(id);
-    if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    if (!ticket || ticket.deletedAt) throw new NotFoundException(`Ticket ${id} not found`);
     return ticket;
   }
 
-  async updateStatus(id: string, dto: UpdateTicketStatusDto): Promise<Ticket> {
+  async updateStatus(id: string, dto: UpdateTicketStatusDto, username: string): Promise<Ticket> {
     const ticket = await this.findOne(id);
 
     if (dto.status === TicketStatus.CLOSED) {
@@ -62,23 +64,34 @@ export class TicketsService {
     }
 
     ticket.status = dto.status;
+    ticket.modifiedBy = username;
     if (dto.status === TicketStatus.RESOLVED) ticket.resolvedAt = new Date();
 
     await this.em.flush();
     return ticket;
   }
 
+  async softDelete(id: string, username: string): Promise<Ticket> {
+    const ticket = await this.findOne(id);
+    ticket.deletedAt = new Date();
+    ticket.deletedBy = username;
+    ticket.modifiedBy = username;
+    await this.em.flush();
+    return ticket;
+  }
+
   async autoCloseResolved(days: number): Promise<number> {
+    const em = this.em.fork();
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
 
-    const tickets = await this.ticketRepo.find({
+    const tickets = await em.find(Ticket, {
       status: TicketStatus.RESOLVED,
       resolvedAt: { $lte: cutoff },
     });
 
     tickets.forEach(t => (t.status = TicketStatus.CLOSED));
-    if (tickets.length) await this.em.flush();
+    if (tickets.length) await em.flush();
     return tickets.length;
   }
 }

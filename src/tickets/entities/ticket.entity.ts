@@ -27,6 +27,9 @@ export const Ticket = defineEntity({
     createdAt: p.type(Date).onCreate(() => new Date()),
     resolvedAt: p.type(Date).nullable(),
     updatedAt: p.type(Date).onUpdate(() => new Date()).onCreate(() => new Date()),
+    deletedAt: p.type(Date).nullable(),
+    deletedBy: p.string().nullable(),
+    modifiedBy: p.string().nullable(),
   },
 });
 

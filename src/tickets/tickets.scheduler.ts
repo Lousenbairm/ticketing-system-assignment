@@ -12,7 +12,7 @@ export class TicketsScheduler {
     private readonly configService: ConfigService,
   ) {}
 
-  @Cron('0 2 * * *')
+  @Cron('* * * * *')
   async handleAutoClose(): Promise<void> {
     const days = Number(this.configService.get<number>('AUTO_CLOSE_DAYS', 3));
     this.logger.log(`Auto-close cron started. Threshold: ${days} days`);

@@ -332,6 +332,145 @@ const NEXT_STATUS = { OPEN: 'IN_PROGRESS', IN_PROGRESS: 'RESOLVED', RESOLVED: nu
 
 ---
 
+## Phase 6: New Features (Post-Stage 15)
+
+### F1 — Robust Search
+
+Extend `GET /tickets?q=` to match across **title, customerName, customerEmail** (was title + description only).
+
+**Backend change — `tickets.service.ts` `findAll`:**
+```typescript
+where.$or = [
+  { title: { $ilike: `%${q}%` } },
+  { customerName: { $ilike: `%${q}%` } },
+  { customerEmail: { $ilike: `%${q}%` } },
+];
+```
+No migration needed — no schema change.
+
+---
+
+### F2 — Table Column Sorting
+
+Client-side only. Ant Design `Table` has a built-in `sorter` prop per column — no backend changes needed.
+
+**Sortable columns:** Title, Customer Name, Priority (LOW < MEDIUM < HIGH), Status, Created date.
+
+```tsx
+{ title: 'Created', dataIndex: 'createdAt', sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() }
+```
+
+Priority sort order: `LOW=0, MEDIUM=1, HIGH=2`.
+
+---
+
+### F3 — Admin Login (JWT)
+
+**New packages:**
+```bash
+npm install @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt
+npm install --save-dev @types/passport-jwt @types/bcrypt
+```
+
+**New entity — `Admin`:**
+```typescript
+export const Admin = defineEntity({
+  name: 'Admin',
+  properties: {
+    id: p.uuid().primary().onCreate(() => uuidv4()),
+    username: p.string(),
+    passwordHash: p.string(),
+    createdAt: p.type(Date).onCreate(() => new Date()),
+  },
+});
+```
+
+**New migration:** adds `admin` table. Seed script inserts one default admin — credentials set via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars, password stored as bcrypt hash. Admin account management (create/remove admins) is deferred to Phase 2.
+
+**New module — `AuthModule`:**
+- `POST /auth/login` — validates username + bcrypt.compare(password, hash) → returns `{ access_token: JWT }`
+- `JwtAuthGuard` — validates Bearer token on protected routes
+- `JWT_SECRET` env var; `JWT_EXPIRES_IN` defaults to `24h`
+
+**Protected routes (require `JwtAuthGuard`):**
+- `GET /tickets` — list
+- `GET /tickets/:id` — detail
+- `PUT /tickets/:id/status` — status update
+- `DELETE /tickets/:id` — soft delete
+
+**Public routes (no auth):**
+- `POST /tickets` — submit ticket (public user)
+- `POST /auth/login`
+
+**New env vars:**
+| Var | Default | Purpose |
+|---|---|---|
+| `JWT_SECRET` | _(required)_ | Signs/verifies tokens |
+| `JWT_EXPIRES_IN` | `24h` | Token lifetime |
+| `ADMIN_USERNAME` | `admin` | Seeded admin username |
+| `ADMIN_PASSWORD` | _(required)_ | Seeded admin password (stored as bcrypt hash) |
+
+---
+
+### F4 — Public User Interface
+
+Two distinct UI modes — no React Router, extend the `View` discriminated union:
+
+```typescript
+type View =
+  | { type: 'public' }             // default — customer submit form
+  | { type: 'admin-login' }        // admin login screen
+  | { type: 'list' }               // admin — ticket table
+  | { type: 'detail'; id: string } // admin — ticket detail
+```
+
+**Public view (default, no auth):**
+- "Submit a Ticket" form (same fields as before)
+- "Admin Login" button in the top-right corner → navigates to `{ type: 'admin-login' }`
+
+**Admin login view:**
+- Username + password form → `POST /auth/login` → JWT
+- On success → `{ type: 'list' }`
+- "Back" button → `{ type: 'public' }`
+
+**Admin views (list + detail):**
+- Header shows "Logout" button → clears JWT, returns to `{ type: 'public' }`
+
+**JWT storage:** `localStorage`. Axios interceptor attaches `Authorization: Bearer <token>` on every request.
+
+**Single admin account:** One hardcoded seed — username and password set via env vars `ADMIN_USERNAME` / `ADMIN_PASSWORD`. No admin account management UI (deferred to Phase 2).
+
+**New components:**
+- `PublicSubmit.tsx` — customer-facing ticket form with "Admin Login" button
+- `AdminLogin.tsx` — username + password form, calls `POST /auth/login`
+
+---
+
+### F5 — Soft Delete
+
+**Entity changes — new columns on `Ticket`:**
+```typescript
+deletedAt: p.type(Date).nullable(),   // set on delete
+deletedBy: p.string().nullable(),      // admin username who deleted
+modifiedBy: p.string().nullable(),     // last admin to touch record (status change or delete)
+```
+
+**New migration:** adds `deleted_at`, `deleted_by`, `modified_by` columns to `ticket`.
+
+**Backend changes:**
+- `DELETE /tickets/:id` (admin-only) — sets `deletedAt = new Date()`, `deletedBy = req.user.username`, `modifiedBy = req.user.username`
+- `updateStatus` — sets `modifiedBy = req.user.username` on every status change
+- `findAll` — adds `deletedAt: null` to default where clause
+- `findAll` accepts optional `?includeDeleted=true` query param (admin toggle) to remove the filter
+- `findOne` — throws 404 if ticket is soft-deleted (unless admin requests with `includeDeleted`)
+
+**Frontend changes:**
+- Delete button in `TicketDetail` (admin view only) — confirms before delete, returns to list on success
+- "Show deleted" toggle switch in `TicketList` header — calls `fetchTickets` with `includeDeleted=true`
+- Deleted tickets shown with a strikethrough or grey row style
+
+---
+
 ## Development Checklist
 
 See [CHECKLIST.md](./CHECKLIST.md) for the full step-by-step checklist (Stages 0–16).
