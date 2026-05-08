@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #ffffff;
+    color: #111111;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 48px;
+    gap: 48px;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .diagram {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .docker-box {
+    border: 2px dashed #999999;
+    border-radius: 12px;
+    padding: 28px 32px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .docker-label {
+    position: absolute;
+    top: -13px;
+    left: 20px;
+    background: #ffffff;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #333333;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .box {
+    border: 2px solid #111111;
+    border-radius: 10px;
+    padding: 20px 24px;
+    text-align: center;
+    min-width: 150px;
+    background: #ffffff;
+  }
+
+  .box .icon  { font-size: 28px; margin-bottom: 8px; }
+  .box .name  { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .box .tech  { font-size: 12px; color: #555555; margin-bottom: 8px; }
+  .box .port  {
+    font-size: 11px;
+    font-family: monospace;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 2px 8px;
+    display: inline-block;
+  }
+
+  .arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 80px;
+  }
+
+  .arrow-line { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .arrow-row  { display: flex; align-items: center; width: 100%; }
+  .line       { flex: 1; height: 1.5px; background: #999999; }
+
+  .arrowhead-right { color: #999999; font-size: 14px; margin-left: -4px; }
+  .arrowhead-left  { color: #999999; font-size: 14px; margin-right: -4px; }
+
+  .arrow-label { font-size: 11px; color: #555555; white-space: nowrap; font-family: monospace; }
+
+  table {
+    width: 700px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    background: #111111;
+    color: #ffffff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  td { padding: 9px 14px; border: 1px solid #111111; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>System Architecture</h1>
+
+<div class="diagram">
+
+  <div class="box">
+    <div class="icon">🌐</div>
+    <div class="name">Browser</div>
+    <div class="tech">User / Admin</div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-line">
+      <div class="arrow-row"><div class="line"></div><div class="arrowhead-right">▶</div></div>
+      <div class="arrow-label">HTTP</div>
+      <div class="arrow-row"><div class="arrowhead-left">◀</div><div class="line"></div></div>
+    </div>
+  </div>
+
+  <div class="docker-box">
+    <div class="docker-label">🐳 Docker Compose</div>
+
+    <div class="box">
+      <div class="icon">⚛️</div>
+      <div class="name">Frontend</div>
+      <div class="tech">React + Vite</div>
+      <div class="port">:5173</div>
+    </div>
+
+    <div class="arrow">
+      <div class="arrow-line">
+        <div class="arrow-row"><div class="line"></div><div class="arrowhead-right">▶</div></div>
+        <div class="arrow-label">REST / Axios</div>
+        <div class="arrow-row"><div class="arrowhead-left">◀</div><div class="line"></div></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="icon">🔧</div>
+      <div class="name">Backend</div>
+      <div class="tech">NestJS + MikroORM</div>
+      <div class="port">:3000</div>
+    </div>
+
+    <div class="arrow">
+      <div class="arrow-line">
+        <div class="arrow-row"><div class="line"></div><div class="arrowhead-right">▶</div></div>
+        <div class="arrow-label">SQL / ORM</div>
+        <div class="arrow-row"><div class="arrowhead-left">◀</div><div class="line"></div></div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="icon">🐘</div>
+      <div class="name">Database</div>
+      <div class="tech">PostgreSQL 16</div>
+      <div class="port">:5432</div>
+    </div>
+
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Layer</th>
+      <th>Technology</th>
+      <th>Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Frontend</td><td>React + Vite + Ant Design + Zustand + Axios</td><td>UI, state management, API calls</td></tr>
+    <tr><td>Backend</td><td>NestJS + TypeScript + MikroORM + Passport JWT</td><td>Business logic, REST API, auth, cron</td></tr>
+    <tr><td>Database</td><td>PostgreSQL 16</td><td>Persistent storage, enum types</td></tr>
+    <tr><td>Runtime</td><td>Docker Compose (3 services)</td><td>Containerised, reproducible environment</td></tr>
+  </tbody>
+</table>
+
+</body>
+</html>

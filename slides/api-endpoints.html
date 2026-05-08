@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>API Endpoints</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #ffffff;
+    color: #111111;
+    padding: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  table {
+    width: 960px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    background: #111111;
+    color: #ffffff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 10px 14px;
+    border: 1px solid #111111;
+    vertical-align: top;
+  }
+
+  tr:nth-child(even) td { background: #f9f9f9; }
+
+  .section-row td {
+    background: #eeeeee;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #444444;
+    padding: 6px 14px;
+  }
+
+  .method {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid;
+  }
+
+  .get    { color: #166534; border-color: #166534; background: #f0fdf4; }
+  .post   { color: #1e40af; border-color: #1e40af; background: #eff6ff; }
+  .put    { color: #92400e; border-color: #92400e; background: #fffbeb; }
+  .delete { color: #991b1b; border-color: #991b1b; background: #fef2f2; }
+
+  .route { font-family: monospace; font-size: 13px; }
+  .param { color: #6d28d9; }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 600;
+    border: 1px solid;
+    display: inline-block;
+  }
+
+  .public  { color: #166534; border-color: #166534; background: #f0fdf4; }
+  .guarded { color: #6d28d9; border-color: #6d28d9; background: #f5f3ff; }
+  .req     { color: #166534; border-color: #166534; background: #f0fdf4; }
+  .opt     { color: #92400e; border-color: #92400e; background: #fffbeb; }
+
+  .code {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid;
+    display: inline-block;
+  }
+
+  .s2xx { color: #166534; border-color: #166534; background: #f0fdf4; }
+  .s4xx { color: #991b1b; border-color: #991b1b; background: #fef2f2; }
+
+  .note { color: #555555; font-size: 12px; }
+
+  .transition {
+    font-family: monospace;
+    font-size: 12px;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+
+<h1>API Endpoints</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Route</th>
+      <th>Request</th>
+      <th>Responses</th>
+      <th>Auth</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- Auth -->
+    <tr class="section-row"><td colspan="5">Authentication</td></tr>
+
+    <tr>
+      <td><span class="method post">POST</span></td>
+      <td><span class="route">/auth/login</span></td>
+      <td>
+        <span class="badge req">required</span> username: string<br>
+        <span class="badge req">required</span> password: string
+      </td>
+      <td>
+        <span class="code s2xx">200</span> { access_token }<br>
+        <span class="code s4xx">401</span> Invalid credentials
+      </td>
+      <td><span class="badge public">Public</span></td>
+    </tr>
+
+    <!-- Tickets -->
+    <tr class="section-row"><td colspan="5">Tickets</td></tr>
+
+    <tr>
+      <td><span class="method post">POST</span></td>
+      <td><span class="route">/tickets</span></td>
+      <td>
+        <span class="badge req">required</span> title: string (max 255)<br>
+        <span class="badge req">required</span> customerName: string<br>
+        <span class="badge req">required</span> customerEmail: email<br>
+        <span class="badge req">required</span> description: string<br>
+        <span class="badge opt">optional</span> priority: LOW | MEDIUM | HIGH
+      </td>
+      <td>
+        <span class="code s2xx">201</span> Ticket created, status = OPEN<br>
+        <span class="code s4xx">400</span> Validation error
+      </td>
+      <td><span class="badge public">Public</span></td>
+    </tr>
+
+    <tr>
+      <td><span class="method get">GET</span></td>
+      <td><span class="route">/tickets</span></td>
+      <td>
+        <span class="badge opt">optional</span> ?status= OPEN | IN_PROGRESS | RESOLVED | CLOSED<br>
+        <span class="badge opt">optional</span> ?q= keyword search (title, name, email)<br>
+        <span class="badge opt">optional</span> ?includeDeleted= true | false
+      </td>
+      <td>
+        <span class="code s2xx">200</span> Array of tickets (createdAt DESC)<br>
+        <span class="code s4xx">401</span> Missing or invalid token
+      </td>
+      <td><span class="badge guarded">🔒 Admin</span></td>
+    </tr>
+
+    <tr>
+      <td><span class="method get">GET</span></td>
+      <td><span class="route">/tickets/<span class="param">:id</span></span></td>
+      <td>
+        <span class="badge req">required</span> id: uuid (path param)
+      </td>
+      <td>
+        <span class="code s2xx">200</span> Single ticket object<br>
+        <span class="code s4xx">400</span> Invalid UUID format<br>
+        <span class="code s4xx">401</span> Missing or invalid token<br>
+        <span class="code s4xx">404</span> Not found or soft-deleted
+      </td>
+      <td><span class="badge guarded">🔒 Admin</span></td>
+    </tr>
+
+    <tr>
+      <td><span class="method put">PUT</span></td>
+      <td><span class="route">/tickets/<span class="param">:id</span>/status</span></td>
+      <td>
+        <span class="badge req">required</span> status: OPEN | IN_PROGRESS | RESOLVED | CLOSED<br><br>
+        <span class="note">Valid transitions: OPEN → IN_PROGRESS → RESOLVED<br>CLOSED is cron-only — returns 400 if requested via API</span>
+      </td>
+      <td>
+        <span class="code s2xx">200</span> Updated ticket, resolvedAt set if → RESOLVED<br>
+        <span class="code s4xx">400</span> Invalid transition or CLOSED requested<br>
+        <span class="code s4xx">401</span> Missing or invalid token<br>
+        <span class="code s4xx">404</span> Not found
+      </td>
+      <td><span class="badge guarded">🔒 Admin</span></td>
+    </tr>
+
+    <tr>
+      <td><span class="method delete">DELETE</span></td>
+      <td><span class="route">/tickets/<span class="param">:id</span></span></td>
+      <td>
+        <span class="badge req">required</span> id: uuid (path param)
+      </td>
+      <td>
+        <span class="code s2xx">200</span> Ticket with deletedAt + deletedBy set<br>
+        <span class="note">(row is kept in DB — soft delete)</span><br>
+        <span class="code s4xx">401</span> Missing or invalid token<br>
+        <span class="code s4xx">404</span> Not found or already deleted
+      </td>
+      <td><span class="badge guarded">🔒 Admin</span></td>
+    </tr>
+
+  </tbody>
+</table>
+
+</body>
+</html>

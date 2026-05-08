@@ -1,408 +1,259 @@
-# Notes
-
-## Docker Commands Reference
-
-| Command | What it does |
-|---------|-------------|
-| `docker compose up --build -d` | Build images and start all containers in background |
-| `docker compose up --build --force-recreate -V frontend -d` | Rebuild + recreate a specific service + renew anonymous volumes (use after adding npm packages) |
-| `docker compose down` | Stop and remove containers (keeps volumes) |
-| `docker compose down -v` | Stop and remove containers + delete all volumes (wipes DB data) |
-| `docker compose restart backend` | Restart a single service — forces watch mode to recompile when file watcher misses a change |
-| `docker compose start backend` | Start a stopped service without rebuilding |
-| `docker compose stop backend` | Stop a single service without removing it |
-| `docker compose ps` | List all containers and their status |
-| `docker compose logs backend` | Show logs for a service |
-| `docker compose logs backend --tail=20` | Show last 20 lines of logs |
-| `docker compose exec backend <cmd>` | Run a command inside a running container |
-| `docker compose exec backend npx mikro-orm migration:up` | Apply pending DB migrations |
-| `docker compose exec db psql -U postgres -d ticketing -c "\d ticket"` | Inspect table schema in PostgreSQL |
-
-### When to use which
-
-| Situation | Command |
-|-----------|---------|
-| First time starting the project | `docker compose up --build -d` |
-| Added new npm package to `package.json` | `docker compose up --build --force-recreate -V <service> -d` |
-| Code change not picked up by watch mode (Windows) | `docker compose restart backend` |
-| Changed `.env` values | `docker compose up -d` (recreates container to reload env) |
-| Fresh start — wipe everything including DB | `docker compose down -v && docker compose up --build -d` |
-| Check if containers are running | `docker compose ps` |
-| Debug a crash or startup error | `docker compose logs <service> --tail=30` |
+# Study Notes — Customer Service Ticketing System
 
 ---
 
-## Docker Bind Mount — How Watch Mode Sees Local File Changes
+## 1. System Overview
 
-The `docker-compose.yml` mounts your local project folder directly into the container:
+A full-stack ticketing system where:
+- **Customers** submit support tickets via a public form (no login required)
+- **Admins** log in to view, manage, and close tickets
+- A **background scheduler** auto-closes tickets that have been RESOLVED for 3+ days
+
+**Tech stack:**
+| Layer | Technology |
+|---|---|
+| Backend | NestJS 11 + TypeScript |
+| ORM | MikroORM v7 (PostgreSQL driver) |
+| Database | PostgreSQL 16 |
+| Auth | JWT + Passport |
+| Scheduler | `@nestjs/schedule` (cron) |
+| Frontend | React + TypeScript (Vite) |
+| UI Library | Ant Design |
+| State | Zustand |
+| HTTP client | Axios |
+| Runtime | Docker (3 containers) |
+
+---
+
+## 2. Architecture
+
+```
+Browser (port 5173)
+    └── React frontend (Vite)
+            └── Axios → HTTP → NestJS backend (port 3000)
+                                    └── MikroORM → PostgreSQL (port 5432)
+```
+
+**Monorepo layout:**
+- Backend: project root
+- Frontend: `/frontend`
+- Three Docker services: `db`, `backend`, `frontend`
+
+**Request path (backend):**
+```
+HTTP Request
+  → TicketsController   (routing, validation, guards)
+  → TicketsService      (business logic)
+  → EntityRepository    (queries)
+  → EntityManager       (writes/flush)
+  → PostgreSQL
+```
+
+---
+
+## 3. Data Model — Ticket Entity
+
+```typescript
+Ticket {
+  id:            uuid (auto-generated)
+  title:         string
+  customerName:  string
+  customerEmail: string
+  description:   text
+  status:        OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  priority:      LOW | MEDIUM | HIGH  (default: MEDIUM)
+  createdAt:     Date (auto)
+  resolvedAt:    Date | null          (set only when → RESOLVED)
+  updatedAt:     Date (auto-updated)
+  deletedAt:     Date | null          (soft delete)
+  deletedBy:     string | null        (admin username)
+  modifiedBy:    string | null        (last admin to act)
+}
+```
+
+**Admin entity** (for auth):
+```typescript
+Admin { id, username, passwordHash, createdAt }
+```
+
+---
+
+## 4. Status Machine
+
+Valid transitions enforced in `TicketsService`, not the entity:
+
+```
+OPEN → IN_PROGRESS → RESOLVED → (CLOSED — cron only)
+```
+
+Rules:
+- API can only do: OPEN→IN_PROGRESS, IN_PROGRESS→RESOLVED
+- `PUT /tickets/:id/status` with CLOSED → **400** ("auto-closed by scheduler only")
+- Skipping a step (e.g. OPEN→RESOLVED) → **400**
+- `resolvedAt` is set only on transition to RESOLVED
+- `modifiedBy` is set to the admin's username on every status change
+
+---
+
+## 5. REST API
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| `POST` | `/tickets` | Public | Submit a ticket |
+| `GET` | `/tickets` | Admin | List tickets (filters: status, q, includeDeleted) |
+| `GET` | `/tickets/:id` | Admin | Get single ticket |
+| `PUT` | `/tickets/:id/status` | Admin | Advance status |
+| `DELETE` | `/tickets/:id` | Admin | Soft delete |
+| `POST` | `/auth/login` | Public | Get JWT token |
+
+**Query params for `GET /tickets`:**
+- `?status=OPEN` — filter by status
+- `?q=keyword` — search title, description, customerName, customerEmail (case-insensitive, uses `$ilike`)
+- `?includeDeleted=true` — include soft-deleted tickets
+
+---
+
+## 6. Authentication (JWT)
+
+Flow:
+1. Admin POSTs credentials to `POST /auth/login`
+2. Backend verifies password with `bcrypt.compare`
+3. Returns `{ access_token: <JWT> }` signed with `JWT_SECRET`
+4. Frontend stores token in `localStorage`
+5. Axios interceptor attaches `Authorization: Bearer <token>` to every request
+6. `JwtAuthGuard` (Passport strategy) validates the token on protected routes
+7. On 401, Axios interceptor clears the token and redirects to login
+
+**Single seeded admin** — credentials from `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars, password stored as bcrypt hash. Inserted on app startup if no admin row exists.
+
+---
+
+## 7. Scheduler (Auto-Close)
+
+```
+Every day at 02:00 AM:
+  1. Compute cutoff = today − AUTO_CLOSE_DAYS (default: 3)
+  2. Find all RESOLVED tickets where resolvedAt <= cutoff
+  3. Set each ticket's status to CLOSED
+  4. flush() only if there are tickets to close
+  5. Log: "Tickets closed: N"
+```
+
+Key detail — `em.fork()`: MikroORM's EntityManager is request-scoped. Cron jobs have no request, so the service calls `em.fork()` to get an isolated copy of the EM for that job run. Without this, MikroORM throws a validation error.
+
+---
+
+## 8. Soft Delete
+
+- `DELETE /tickets/:id` does NOT remove the row from the database
+- Sets `deletedAt`, `deletedBy`, `modifiedBy` on the ticket
+- `findAll` excludes deleted tickets by default (`deletedAt: null` in where clause)
+- `findAll(?includeDeleted=true)` removes that filter
+- `findOne` throws 404 if ticket is soft-deleted
+- Frontend: "Show deleted" toggle in the list; deleted rows shown with strikethrough styling
+
+---
+
+## 9. Database — Migrations
+
+Migrations are versioned SQL scripts that create/alter tables in a controlled, reproducible way.
+
+```
+entity (TypeScript) → migration (SQL) → table in PostgreSQL
+```
+
+- Without running migrations, the table doesn't exist and every query fails
+- `migration:up` applies all unapplied migrations in order
+- Applied migrations are tracked in the `mikro_orm_migrations` table
+
+**This project's migrations:**
+| File | What it does |
+|---|---|
+| `Migration20260505091006` | Creates `ticket` table |
+| `Migration20260507000000` | Creates `admin` table |
+| `Migration20260507000001` | Adds `deleted_at`, `deleted_by`, `modified_by` to `ticket` |
+
+---
+
+## 10. MikroORM Key Concepts
+
+**Repository vs EntityManager:**
+- `EntityRepository<Ticket>` — scoped to one entity, handles reads (`find`, `findOne`)
+- `EntityManager` — handles writes (`persistAndFlush`, `flush`)
+
+**Why both?** Repository finds entities. EntityManager commits mutations. After mutating a property on an entity object directly (`ticket.status = ...`), calling `em.flush()` persists the change.
+
+**`TsMorphMetadataProvider`:** Uses the TypeScript compiler to read entity source files and infer column types automatically. Without it, every property needs explicit type annotation.
+
+**`autoLoadEntities: true`:** Tells MikroORM to auto-register entities declared in feature modules — no need to list them in the root config.
+
+---
+
+## 11. Frontend Architecture
+
+**No React Router** — navigation is a `useState` discriminated union:
+```typescript
+type View =
+  | { type: 'public' }           // customer submit form (default)
+  | { type: 'admin-login' }      // login screen
+  | { type: 'list' }             // admin ticket table
+  | { type: 'detail'; id: string } // admin ticket detail
+```
+
+**Zustand store** owns all server state: `tickets`, `selectedTicket`, `loading`, `error`, `statusFilter`, `searchQuery`, `includeDeleted`. Components read from the store; actions call the API and update the store.
+
+**Axios interceptors:**
+- Request: attaches `Authorization: Bearer <token>` from localStorage if present
+- Response: on 401, clears token and dispatches `unauthorized` event → App redirects to login
+
+**Loading states:**
+- Table: Ant Design Table `loading` prop
+- Detail: `<Spin size="large">` while fetching
+- Buttons: Ant Design Button `loading` prop during async actions
+
+---
+
+## 12. Docker Setup
+
+Three services in `docker-compose.yml`:
+
+```
+db        → postgres:16-alpine, port 5432, named volume for data persistence
+backend   → NestJS dev server, port 3000, bind-mounted from project root
+frontend  → Vite dev server, port 5173, bind-mounted from ./frontend
+```
+
+**Bind mount + anonymous volume pattern:**
 ```yaml
 volumes:
-  - .:/app          # local folder IS the container's /app
-  - /app/node_modules
+  - .:/app              # live code sync — edits on host appear instantly in container
+  - /app/node_modules   # anonymous volume — protects container's node_modules
+                        # from being overwritten by (possibly empty) host folder
 ```
 
-This means the container is not running a frozen copy of your code. It's reading your files live off your local filesystem. When you edit a file on your machine, the change is immediately visible inside the container at the same path.
+**Key env var override:** `.env` has `DATABASE_HOST=localhost` for local dev. Docker Compose overrides it to `DATABASE_HOST=db` (the service name) so the backend can reach the database container.
 
-This is why:
-- `nest start --watch` inside the backend container recompiles when you save a `.ts` file locally
-- Vite's HMR inside the frontend container hot-reloads the browser when you save a `.tsx` file locally
+**`VITE_API_URL=http://localhost:3000`** — must be the browser-facing URL (host machine), NOT a Docker-internal address. Axios calls come from the browser, not from inside the frontend container.
 
-No rebuild needed for code changes — only rebuild (`docker compose up --build`) when you change `package.json` (new dependencies) or `Dockerfile`.
-
----
-
-## Docker Anonymous Volume — Stale `node_modules`
-
-Docker Compose supports two volume types:
-- **Bind mount** (`./frontend:/app`) — mounts your local folder into the container. Live changes sync instantly.
-- **Anonymous volume** (`/app/node_modules`) — a Docker-managed volume at a specific path. Used to preserve `node_modules` so the bind mount doesn't overwrite it with your local (potentially empty) `node_modules`.
-
-**The stale volume problem:**
-When you run `docker compose up --build`, Docker rebuilds the image and runs `npm install` — but the anonymous volume from the *previous* container run is reused as-is. If packages were added to `package.json` after the volume was first created, the old volume won't have them, causing `Failed to resolve import` errors in Vite.
-
-**Fix:** Use `-V` (`--renew-anon-volumes`) to discard and recreate anonymous volumes from the freshly built image:
+**Common commands:**
 ```bash
-docker compose up --build --force-recreate -V frontend -d
-```
-
-This initializes `/app/node_modules` fresh from the image, which has the latest `npm install` output.
-
-**Rule of thumb:** Any time you add a new npm package to `frontend/package.json`, run with `-V` on the next start to avoid stale volume issues.
-
----
-
-## Test Results
-
-### Unit Tests — `npm test` (Stage 8)
-
-Run locally (not in Docker). All 8 tests pass.
-
-```
-PASS src/tickets/tickets.service.spec.ts
-  TicketsService
-    create
-      ✓ sets status=OPEN and priority=MEDIUM by default
-    updateStatus
-      ✓ OPEN → IN_PROGRESS succeeds
-      ✓ OPEN → RESOLVED throws (skipped step)
-      ✓ any → CLOSED throws with scheduler message
-      ✓ IN_PROGRESS → RESOLVED sets resolvedAt
-    autoCloseResolved
-      ✓ closes ticket with resolvedAt older than threshold
-      ✓ returns 0 and skips flush when no tickets match
-    findOne
-      ✓ throws NotFoundException when ticket missing
-
-Test Suites: 1 passed, 1 total
-Tests:       8 passed, 8 total
+docker compose up --build -d                          # start everything
+docker compose up --build --force-recreate -V <svc> -d  # rebuild + fresh node_modules
+docker compose up -d <svc>                            # recreate one service (picks up .env changes)
+docker compose logs <svc> --tail=30                   # debug startup errors
+docker compose exec db psql -U postgres -d ticketing  # connect to DB
 ```
 
 ---
 
-### Backend Smoke Tests — Stage 9
+## 13. Known Workarounds (for Q&A)
 
-All containers running (`db`, `backend`, `frontend`). Backend at `http://localhost:3000`.
+**MikroORM v7 + CJS clash:** MikroORM v7 is pure ESM; NestJS projects are CommonJS. The app works because NestJS compiles TypeScript first. The MikroORM CLI crashes because it reads raw `.ts` files directly. Fix: applied migration SQL via `psql` directly and inserted the migration record manually.
 
-| # | Request | Expected | Result |
-|---|---------|----------|--------|
-| 9.2 | `POST /tickets` valid body | 201 + UUID `id`, `status=OPEN` | ✅ |
-| 9.3 | `POST /tickets` missing `title` | 400 validation error | ✅ |
-| 9.4 | `POST /tickets` invalid email | 400 validation error | ✅ |
-| 9.5 | `GET /tickets` | 200 array | ✅ |
-| 9.6 | `GET /tickets?status=OPEN` | 200 OPEN-only array | ✅ |
-| 9.7 | `GET /tickets?q=login` | 200 filtered (case-insensitive) | ✅ |
-| 9.8 | `GET /tickets/:id` | 200 single ticket | ✅ |
-| 9.9 | `GET /tickets/not-a-uuid` | 400 (ParseUUIDPipe) | ✅ |
-| 9.10 | `GET /tickets/00000000-…` | 404 not found | ✅ |
-| 9.11 | `PUT /tickets/:id/status` OPEN→RESOLVED | 400 (skipped step) | ✅ |
-| 9.12 | `PUT /tickets/:id/status` →CLOSED | 400 "auto-closed by scheduler only" | ✅ |
-| 9.13 | `PUT /tickets/:id/status` OPEN→IN_PROGRESS | 200, `status=IN_PROGRESS` | ✅ |
-| 9.14 | `PUT /tickets/:id/status` IN_PROGRESS→RESOLVED | 200, `resolvedAt` set | ✅ |
+**PostgreSqlDriver type mismatch:** Minor TypeScript version skew between `@mikro-orm/nestjs` and `@mikro-orm/postgresql`. Fixed with `driver: PostgreSqlDriver as any` — safe at runtime, purely a type-level mismatch.
 
----
+**Jest + ESM packages:** Jest runs in CJS mode; `@mikro-orm/core`, `@mikro-orm/nestjs`, and `uuid` are pure ESM. Fixed by mocking both MikroORM packages in the spec file and adding `transformIgnorePatterns` for `uuid` in `package.json`.
 
-## Migrations
-Migrations are versioned SQL scripts that modify the database schema in a controlled, reproducible way. MikroORM generates them by reading your `Ticket` entity TypeScript source and producing the equivalent SQL (e.g. `CREATE TABLE "ticket" (...)`).
+**`em.fork()` in cron:** MikroORM EntityManager is request-scoped. Cron jobs have no HTTP request context, so calling the global EM directly throws. `em.fork()` creates an isolated copy for the job run.
 
-Each migration file is committed to git. When deploying or starting fresh, you run `migration:up` to apply any unapplied migrations in order — ensuring every environment ends up with the exact same schema.
-
-Migrations differ from auto-sync: letting the ORM sync schema on startup is convenient but dangerous in production as it can silently drop columns.
-
-## Query Generation vs Migrations
-MikroORM does two distinct things:
-- **Query generation (runtime)** — when you call `ticketRepo.find(...)` or `em.flush()`, MikroORM translates that into SQL on the fly. Always happens automatically.
-- **Migrations (schema management)** — a one-time manual operation that creates/alters the actual tables. Without running migrations, the `ticket` table doesn't exist and every runtime query fails.
-
-MikroORM knows how to *talk* to the database (query generation), but migrations are what *build* the database structure in the first place.
-
-## `@mikro-orm/reflection`
-Uses the TypeScript compiler (via `ts-morph`) to read entity source files and automatically infer column types. Without it, types must be declared explicitly on every property. With `TsMorphMetadataProvider`, MikroORM reads the TypeScript type directly. Only needed at dev-time (migration generation, `ts-node`), not in the compiled production build.
-
-## `.env.example`
-A safe-to-commit template showing teammates what variables the app needs, without exposing actual values. `.env` holds real credentials and is gitignored. `.env.example` has the same keys with blank/fake values and is committed to git. New contributors run `cp .env.example .env` and fill in their own values.
-
-## Stage 2 Items
-
-### 2.1 — `mikro-orm.config.ts`
-A standalone config file at the project root used by both the MikroORM CLI and the app. `TsMorphMetadataProvider` is set here so it can read TypeScript types when generating migrations.
-
-### 2.2 — `"mikro-orm"` key in `package.json`
-Tells the MikroORM CLI where to find the config file. Without it, `npx mikro-orm migration:create` fails because the CLI doesn't know where to look.
-
-### 2.3 — Migration scripts in `package.json`
-Shorthand aliases so you can run `npm run migration:create` instead of typing the full `npx mikro-orm ...` command.
-
-### 2.4 — `ticket.entity.ts`
-The TypeScript class representing the `ticket` table. MikroORM reads the decorators (`@Entity`, `@Property`, `@Enum`) to determine columns, types, and constraints. This is the single source of truth — migration SQL is generated from this file, and runtime queries are built against it.
-
-**Dependency chain:** entity → config → migration → table exists → app works.
-
-## CJS vs ESM — Simple Explanation
-
-Node.js has two module systems:
-- **CommonJS (CJS)** — old style, uses `require()`. Default for most projects.
-- **ESM** — modern style, uses `import/export`. Requires opt-in (`"type":"module"` in package.json).
-
-They don't mix well. CJS cannot `require()` a pure-ESM package.
-
-**The clash in this project:**
-- NestJS project → CJS (default)
-- MikroORM v7 → pure ESM
-
-**Why the app still works:** NestJS compiles TypeScript to JS first (`tsc`), then runs it. The compiled output handles imports in a way that avoids the clash at runtime.
-
-**Why the CLI breaks:** `npx mikro-orm migration:up` reads raw `.ts` files directly via `tsx`. It sees a CJS project importing pure-ESM MikroORM — crash.
-
-**Analogy:** CJS and ESM are like two different plug shapes. The app has an adapter (NestJS compiler). The CLI doesn't — it plugs directly and fails.
-
----
-
-## TypeScript Transpilers
-Tools that convert TypeScript to JavaScript so Node.js can run it. MikroORM v7 CLI dropped `ts-node` support and now requires one of these:
-
-| Tool | Description |
-|------|-------------|
-| `tsx` | Wraps Node.js, runs `.ts` files directly. Simplest drop-in. |
-| `swc` | Rust-based, very fast. Used by Next.js/Vite under the hood. |
-| `oxc` | Newest Rust-based transpiler, fastest but least mature. |
-| `jiti` | Similar to `tsx`, used internally by Nuxt/Vite tooling. |
-
-This project uses `tsx` — no config needed, just install and it works. Required for `npx mikro-orm migration:create` to resolve the TypeScript config file.
-
-## module: "nodenext" vs CommonJS
-
-`tsconfig.json` uses `"module": "nodenext"` which tells tsx to resolve imports as ESM (modern JS modules). But `package.json` has no `"type": "module"`, so Node.js treats files as CJS (old-style CommonJS).
-
-This mismatch causes tsx to `require()` packages using ESM resolution rules — named exports like `PrimaryKey` from `@mikro-orm/core` come back as `undefined`, causing `PrimaryKey is not a function`.
-
-**Fix**: `tsconfig.mikro-orm.json` overrides `module` to `CommonJS` so tsx uses old-style require() and resolves packages correctly. Only used for the MikroORM CLI, not the app itself.
-
-## Stage 4.2 — Repository & EntityManager Injection
-
-### `@InjectRepository(Ticket)`
-MikroORM provides a repository per entity — a pre-scoped query object that always operates on the `ticket` table. `@InjectRepository(Ticket)` tells NestJS's DI: "go find the repository registered for the `Ticket` entity and inject it here." It is registered in the module via `MikroOrmModule.forFeature([Ticket])` (Stage 7).
-
-`EntityRepository<Ticket>` gives typed methods like `ticketRepo.find(...)`, `ticketRepo.findOne(...)` scoped to the `Ticket` entity.
-
-### `EntityManager`
-The repository handles *finding* entities. The `EntityManager` (`em`) handles *persisting changes* — `em.persistAndFlush(entity)` to insert, `em.flush()` to commit mutations. Both are needed because:
-- `ticketRepo.find(...)` → reads
-- `em.flush()` → writes (after mutating entity properties directly)
-
-### Why constructor injection?
-NestJS DI works through the constructor. When NestJS instantiates `TicketsService`, it reads the constructor parameter types and decorators, resolves the dependencies from its container, and passes them in. `private readonly` makes them instance properties automatically — no `this.ticketRepo = ticketRepo` needed.
-
-## MikroORM v7 ESM/CJS Incompatibility — Migration CLI Broken
-
-MikroORM v7 is **pure ESM** (no CommonJS exports). NestJS projects are **CommonJS** by default (no `"type": "module"` in `package.json`). This causes the migration CLI to fail regardless of how tsx is invoked:
-
-- `npx mikro-orm migration:up` — tsx CJS loader can't import ESM-only `@mikro-orm/core`; named exports like `PrimaryKey` come back `undefined`
-- `npm run migration:up` (with `node --import tsx/esm`) — same CJS interop failure
-- `tsx run-migration.mts` — tsx still loads transitive `.ts` imports (entity, config) as CJS because the project has no `"type": "module"`; hits the same wall
-
-**Root cause**: tsx determines module format from file extension (`.mts` → ESM, `.ts` → CJS unless `"type": "module"` in `package.json`). The entity and config are `.ts`, so they're loaded as CJS, which can't import pure-ESM `@mikro-orm/core`.
-
-**Workaround (used here)**: Apply the migration SQL directly via `psql` and manually insert a row into `mikro_orm_migrations` to mark it as applied. Equivalent to `migration:up` for a single initial migration.
-
-**Proper fixes (not done — out of scope for assignment)**:
-- Downgrade to MikroORM v6 — has CJS exports, CLI works normally
-- Add `"type": "module"` to `package.json` — requires full ESM migration of NestJS (non-trivial)
-
-## MikroORM v7 — No Decorator API
-
-MikroORM v7 **removed** the traditional decorator-based entity API (`@Entity`, `@Property`, `@PrimaryKey`, `@Enum`). These no longer exist in `@mikro-orm/core`. Entities must be defined with `defineEntity` + `p` (property builders).
-
-**Old (v5/v6, doesn't work in v7):**
-```typescript
-@Entity()
-class Ticket {
-  @PrimaryKey({ type: 'uuid' }) id = uuidv4();
-  @Property() title!: string;
-  @Enum(() => TicketStatus) status = TicketStatus.OPEN;
-}
-```
-
-**New (v7):**
-```typescript
-import { defineEntity, InferEntity, p } from '@mikro-orm/core';
-
-export const Ticket = defineEntity({
-  name: 'Ticket',
-  properties: {
-    id: p.uuid().primary().onCreate(() => uuidv4()),
-    title: p.string(),
-    status: p.enum(() => TicketStatus).default(TicketStatus.OPEN),
-  },
-});
-export type Ticket = InferEntity<typeof Ticket>;
-```
-
-Key `p` builders: `p.uuid()`, `p.string()`, `p.text()`, `p.type(Date)`, `p.enum(() => EnumObj)`, `p.boolean()`.
-Chain methods: `.primary()`, `.default(value)`, `.nullable()`, `.onCreate(fn)`, `.onUpdate(fn)`.
-
-**`p.date()` vs `p.type(Date)`:** `p.date()` infers value type as `string` (ISO format). Use `p.type(Date)` to get `Date` as the JS value type so `Date` comparisons in `FilterQuery` work correctly.
-
-**`onCreate` callback gotcha:** The `onCreate` callback receives `(entity, em)`. Passing `uuidv4` directly breaks because uuid v14 treats the second argument as a buffer. Always wrap: `onCreate(() => uuidv4())`.
-
-## tsconfig.build.json — CommonJS override for NestJS
-
-NestJS requires `module: CommonJS`. The project's base `tsconfig.json` used `nodenext` (incompatible with `@mikro-orm/core` v7 types). Fix in `tsconfig.build.json`:
-```json
-{
-  "compilerOptions": { "module": "CommonJS", "moduleResolution": "Node" },
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "frontend", "run-migration.mts", "migrations"]
-}
-```
-The `exclude` list prevents the NestJS compiler from picking up frontend JSX files and migration scripts.
-
-## Jest + ESM packages — Unit Test Workaround
-
-Jest runs in CommonJS mode by default. Three packages in this project are pure ESM and cannot be `require()`d by Jest:
-
-| Package | Why it fails |
-|---------|-------------|
-| `@mikro-orm/core` | Pure ESM; also uses `import.meta` which CJS transpilation cannot handle |
-| `@mikro-orm/nestjs` | Pure ESM (`export * from './...'` at top of index.js) |
-| `uuid` v14 | Pure ESM |
-
-**Fix applied in `tickets.service.spec.ts`:**
-```typescript
-// At the very top of the spec file — jest.mock() calls are hoisted above imports
-jest.mock('@mikro-orm/nestjs', () => ({
-  InjectRepository: () => () => {},
-}));
-jest.mock('@mikro-orm/core', () => {
-  const noop = () => () => {};
-  return { Entity: noop, Property: noop, PrimaryKey: noop, Enum: noop,
-           EntityRepository: class {}, EntityManager: class {} };
-});
-```
-
-**Fix applied in `package.json` jest config:**
-```json
-"transformIgnorePatterns": ["/node_modules/(?!uuid)"]
-```
-This tells ts-jest to transform `uuid` (instead of leaving it as-is), solving the ESM import error.
-
-**Why not use TestingModule?** `@nestjs/testing`'s `Test.createTestingModule` imports `@mikro-orm/nestjs` internally for DI token resolution. The mock intercepts it before it loads. The service is instantiated directly:
-```typescript
-service = new TicketsService(repo as any, em as any);
-```
-
-**The DI injection token:** `@InjectRepository(Ticket)` uses the token `'TicketRepository'` (entity name + `'Repository'`). This is deterministic — no need to import `getRepositoryToken` from the ESM-only package.
-
----
-
-## PostgreSqlDriver type incompatibility — `as any` cast
-
-`@mikro-orm/nestjs@7.0.1` and `@mikro-orm/postgresql@7.0.14` have a type mismatch: `SqlSchemaGenerator` in `@mikro-orm/postgresql` is missing `refresh` and `ensureIndexes` from the `ISchemaGenerator` interface that `@mikro-orm/nestjs` expects.
-
-**Symptom:** TypeScript error in `app.module.ts`:
-```
-Type 'typeof PostgreSqlDriver' is not assignable to type ...
-Type 'SqlSchemaGenerator' is missing ... 'refresh', 'ensureIndexes'
-```
-
-**Fix:** Cast the driver to bypass the version mismatch:
-```typescript
-driver: PostgreSqlDriver as any,
-```
-This is safe — the driver IS correct at runtime, it's purely a TypeScript interface version skew.
-
----
-
-## Case-sensitive search — `$like` vs `$ilike`
-
-PostgreSQL's `LIKE` operator is case-sensitive. `WHERE title LIKE '%login%'` will NOT match `'Login bug'`.
-
-**Fix:** Use `$ilike` (case-insensitive LIKE) in the service:
-```typescript
-where.$or = [
-  { title: { $ilike: `%${query.q}%` } },
-  { description: { $ilike: `%${query.q}%` } },
-];
-```
-`$ilike` is PostgreSQL-specific. It compiles to `ILIKE` in the SQL. MikroORM supports it for PostgreSQL drivers.
-
----
-
-## `.env` — DATABASE_PASSWORD must not be empty
-
-The `.env` file originally had `DATABASE_PASSWORD=` (empty string). PostgreSQL with `scram-sha-256` authentication (default in Postgres 14+) **rejects empty passwords** — the `pg` client throws:
-
-```
-SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string
-```
-
-The Docker DB service was initialized with `POSTGRES_PASSWORD: postgres`, so the password in `.env` must also be `postgres`.
-
-**`.env` correct values:**
-```
-DATABASE_PASSWORD=postgres
-```
-
----
-
-## `docker compose restart` vs `docker compose up -d` — env_file reloading
-
-`docker compose restart` restarts a running container **without re-reading `env_file`**. The environment variables are baked in at container creation time.
-
-To pick up `.env` changes, you must **recreate** the container:
-```bash
-docker compose up -d backend    # recreates + starts with new env
-```
-
-`up -d` detects that the config changed and recreates automatically. `restart` just stops/starts the existing container.
-
----
-
-## MikroORM `em.fork()` — Required in Background Tasks
-
-MikroORM's `EntityManager` is **request-scoped** in NestJS. Each HTTP request gets its own isolated EM workspace that tracks DB changes for that request and cleans up after.
-
-Cron jobs have no request. When a background task uses the injected global `EntityManager` directly, MikroORM refuses with:
-```
-ValidationError: Using global EntityManager instance methods for context specific actions is disallowed.
-```
-
-**Fix:** Call `em.fork()` at the start of the background task. This creates a fresh, isolated copy of the EM just for that job run — same connection pool, own identity map, no interference with active requests.
-
-```typescript
-async autoCloseResolved(days: number): Promise<number> {
-  const em = this.em.fork(); // isolated copy for this cron run
-  const tickets = await em.find(Ticket, { ... });
-  tickets.forEach(t => (t.status = TicketStatus.CLOSED));
-  if (tickets.length) await em.flush();
-  return tickets.length;
-}
-```
-
-**Analogy:** The global EM is a shared office whiteboard. MikroORM won't let a background job write on it while others may be reading. `fork()` gives the job its own private whiteboard — same markers, no interference.
-
----
-
-## cross-env
-
-A utility that sets environment variables in npm scripts cross-platform. Windows uses `set VAR=value`, Mac/Linux uses `VAR=value`. `cross-env` abstracts that so the same npm script works on any OS.
-
-Used in migration scripts to set `TSCONFIG_PATH=./tsconfig.mikro-orm.json`, which tells tsx to use the CommonJS-compatible tsconfig instead of the default `nodenext` one.
+**`$ilike` not `$like`:** PostgreSQL's `LIKE` is case-sensitive. `$ilike` compiles to `ILIKE` for case-insensitive search. MikroORM supports it for PostgreSQL drivers only.
